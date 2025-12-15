@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="m-0">🏀 NBA Betting Game</h2>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-light" href="{% url 'games:list' %}">前往賽程</a>
+    <a class="btn btn-sm btn-outline-light" href="{% url 'leaderboard:current' %}">排行榜</a>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h5 class="mb-2">即將開賽</h5>
+  {% if upcoming %}
+    <ul class="list-group list-group-flush">
+      {% for g in upcoming %}
+        <li class="list-group-item bg-transparent text-light d-flex justify-content-between">
+          <span>{{ g.away_team.abbr }} @ {{ g.home_team.abbr }}</span>
+          <a class="btn btn-sm btn-warning" href="{% url 'games:detail' g.id %}">下注</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="text-muted">目前沒有即將開賽的比賽（先去同步賽程）</div>
+  {% endif %}
+</div>
+{% endblock %}

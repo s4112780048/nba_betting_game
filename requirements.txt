@@ -1,0 +1,10 @@
+Django>=5.1,<6.0
+gunicorn
+whitenoise
+dj-database-url
+python-dotenv
+requests
+
+celery
+redis
+django-celery-beat

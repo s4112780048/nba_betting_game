@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+<h3 class="mb-3">🎒 我的道具</h3>
+<div class="card p-3">
+  <table class="table table-dark table-sm align-middle">
+    <thead><tr><th>道具</th><th>數量</th></tr></thead>
+    <tbody>
+    {% for row in inv %}
+      <tr><td>{{ row.item.name }}</td><td>{{ row.quantity }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2" class="text-muted">尚無道具</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

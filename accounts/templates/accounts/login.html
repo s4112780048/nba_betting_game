@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="card p-4 mx-auto" style="max-width:420px;">
+  <h4>登入</h4>
+  <form method="post">{% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn btn-warning w-100">登入</button>
+  </form>
+  <div class="mt-3 text-muted">
+    沒帳號？ <a href="{% url 'accounts:signup' %}">註冊</a>
+  </div>
+</div>
+{% endblock %}

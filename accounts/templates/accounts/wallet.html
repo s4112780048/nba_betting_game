@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Wallet{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="m-0">💰 錢包</h3>
+  <a class="btn btn-outline-light" href="{% url 'shop:list' %}">前往商店</a>
+</div>
+
+<div class="card p-3 mb-3">
+  <div>餘額：<span class="badge bg-warning text-dark fs-6">{{ wallet.balance }}</span></div>
+</div>
+
+<div class="card p-3">
+  <h5>交易紀錄</h5>
+  <div class="table-responsive">
+    <table class="table table-dark table-sm align-middle">
+      <thead>
+        <tr><th>時間</th><th>類型</th><th>金額</th><th>備註</th></tr>
+      </thead>
+      <tbody>
+      {% for tx in txs %}
+        <tr>
+          <td>{{ tx.created_at }}</td>
+          <td>{{ tx.type }}</td>
+          <td>{{ tx.amount }}</td>
+          <td class="text-muted">{{ tx.note }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-muted">尚無交易紀錄</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
