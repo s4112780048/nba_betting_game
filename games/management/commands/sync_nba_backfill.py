@@ -1,5 +1,5 @@
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 import requests
 from django.core.management.base import BaseCommand
@@ -26,12 +26,11 @@ def _parse_utc_iso(s: str):
     if not s:
         return None
     try:
-        # turn 'Z' into '+00:00'
         s = s.replace("Z", "+00:00")
-        dt = timezone.datetime.fromisoformat(s)
-        if timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, timezone=timezone.utc)
-        return dt.astimezone(timezone.utc)
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=dt_timezone.utc)
+        return dt.astimezone(dt_timezone.utc)
     except Exception:
         return None
 
@@ -52,14 +51,14 @@ class Command(BaseCommand):
         session = requests.Session()
         session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (compatible; NBA Betting Django; +https://example.com)",
+                "User-Agent": "Mozilla/5.0 (compatible; NBA Betting Django)",
                 "Accept": "application/json,text/plain,*/*",
                 "Referer": "https://www.nba.com/",
                 "Origin": "https://www.nba.com",
             }
         )
 
-        today_utc = timezone.now().astimezone(timezone.utc).date()
+        today_utc = timezone.now().astimezone(dt_timezone.utc).date()
         start_date = today_utc - timedelta(days=days)
 
         created_games = 0
@@ -103,7 +102,6 @@ class Command(BaseCommand):
 
                     status = _safe_int(g.get("gameStatus"), 1)
 
-                    # teams
                     home = g.get("homeTeam") or {}
                     away = g.get("awayTeam") or {}
 
@@ -116,7 +114,6 @@ class Command(BaseCommand):
                     home_abbr = (home.get("teamTricode") or "").strip()
                     away_abbr = (away.get("teamTricode") or "").strip()
 
-                    # NOTE: avoid NOT NULL constraint
                     home_name = (home.get("teamName") or home_abbr or f"TEAM_{home_id}").strip()
                     away_name = (away.get("teamName") or away_abbr or f"TEAM_{away_id}").strip()
 
@@ -133,23 +130,12 @@ class Command(BaseCommand):
                             defaults={"name": away_name, "city": away_city, "abbr": away_abbr},
                         )
 
-                        if home_created:
-                            created_teams += 1
-                        else:
-                            updated_teams += 1
-                        if away_created:
-                            created_teams += 1
-                        else:
-                            updated_teams += 1
+                        created_teams += int(home_created) + int(away_created)
+                        updated_teams += int(not home_created) + int(not away_created)
 
-                        # time
                         start_time = _parse_utc_iso(g.get("gameTimeUTC") or "")
                         if start_time is None:
-                            # fallback: date noon UTC to avoid crashing
-                            start_time = timezone.make_aware(
-                                timezone.datetime(d.year, d.month, d.day, 12, 0, 0),
-                                timezone=timezone.utc,
-                            )
+                            start_time = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=dt_timezone.utc)
 
                         home_score = _safe_int(home.get("score"), 0)
                         away_score = _safe_int(away.get("score"), 0)
