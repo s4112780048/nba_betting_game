@@ -1,9 +1,12 @@
 from django.urls import path
-from .views import signup_view, login_view, logout_view, wallet_view
+from . import views
+
+app_name = "accounts"
 
 urlpatterns = [
-    path("signup/", signup_view, name="signup"),
-    path("login/", login_view, name="login"),
-    path("logout/", logout_view, name="logout"),
-    path("wallet/", wallet_view, name="wallet"),
+    path("login/", views.login_view, name="login"),
+    path("signup/", views.signup_view, name="signup"),   # ✅ 新增
+    path("logout/", views.logout_view, name="logout"),
+    path("wallet/", views.wallet_view, name="wallet"),
+    path("daily-bonus/", views.daily_bonus, name="daily_bonus"),
 ]

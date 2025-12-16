@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h3 class="mb-0">🎒 背包</h3>
+  <a class="btn btn-ghost" href="{% url 'shop:list' %}">回商店</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card p-3">
+      <h5 class="mb-3">📦 物品</h5>
+      {% for inv in inv_items %}
+        <div class="d-flex align-items-center justify-content-between border-bottom py-2">
+          <div>
+            <div class="fw-semibold">{{ inv.item.name }}</div>
+            <div class="text-muted small">{{ inv.item.kind }} • x{{ inv.qty }}</div>
+          </div>
+
+          {% if inv.item.kind == "LOOT_BOX" %}
+            <form method="post" action="{% url 'shop:open' inv.id %}">
+              {% csrf_token %}
+              <button class="btn btn-warning btn-sm">開箱</button>
+            </form>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="text-muted">目前沒有可用物品</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card p-3">
+      <h5 class="mb-3">🏷️ 徽章</h5>
+      {% for ub in badges %}
+        <div class="d-flex align-items-center justify-content-between border-bottom py-2">
+          <div>
+            <div class="fw-semibold">
+              {{ ub.badge.emoji }} {{ ub.badge.name }}
+              {% if ub.equipped %}<span class="badge bg-success ms-2">已裝備</span>{% endif %}
+            </div>
+            <div class="text-muted small">rarity={{ ub.badge.rarity }}</div>
+          </div>
+
+          <form method="post" action="{% url 'shop:equip_badge' ub.id %}">
+            {% csrf_token %}
+            <button class="btn btn-ghost btn-sm">裝備</button>
+          </form>
+        </div>
+      {% empty %}
+        <div class="text-muted">你還沒有徽章</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

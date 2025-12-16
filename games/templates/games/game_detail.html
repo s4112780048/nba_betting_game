@@ -1,32 +1,63 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Game{% endblock %}
+
 {% block content %}
 <div class="card p-4">
-  <h4>{{ game.away_team.name }} @ {{ game.home_team.name }}</h4>
-  <div class="text-muted mb-3">開賽時間(UTC)：{{ game.start_time_utc }}</div>
+  <!-- 對戰標題 + Logo -->
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <img src="{% static 'team_logos/' %}{{ game.away_team.nba_team_id }}.svg"
+         style="height:28px;width:auto" alt="{{ game.away_team.name }}"
+         onerror="this.style.display='none'">
+    <h4 class="mb-0">
+      {{ game.away_team.abbr|default:game.away_team.name }}
+      <span class="text-muted">@</span>
+      {{ game.home_team.abbr|default:game.home_team.name }}
+    </h4>
+    <img src="{% static 'team_logos/' %}{{ game.home_team.nba_team_id }}.svg"
+         style="height:28px;width:auto" alt="{{ game.home_team.name }}"
+         onerror="this.style.display='none'">
+  </div>
+
+  <div class="text-muted mb-3 mt-2">
+    開賽時間：{{ game.start_time_utc|date:"Y-m-d" }} {{ game.start_time_utc|time:"H:i" }}（UTC）
+  </div>
 
   {% if error %}
-    <div class="alert alert-danger">{{ error }}</div>
+    <div class="alert alert-danger soft-alert">{{ error }}</div>
   {% endif %}
 
   <form method="post">{% csrf_token %}
-    <div class="mb-2">選擇勝方：</div>
-    <div class="d-flex gap-2 mb-3">
-      <label class="btn btn-outline-light">
-        <input type="radio" name="pick" value="away" required> 客隊 {{ game.away_team.abbr }}
+    <div class="mb-2 fw-semibold">選擇勝方：</div>
+
+    <div class="d-flex gap-2 flex-wrap mb-3">
+      <label class="btn btn-outline-light d-flex align-items-center gap-2">
+        <input type="radio" name="pick" value="away" required>
+        <img src="{% static 'team_logos/' %}{{ game.away_team.nba_team_id }}.svg"
+             style="height:20px;width:auto" alt=""
+             onerror="this.style.display='none'">
+        客隊 {{ game.away_team.abbr|default:game.away_team.name }}
       </label>
-      <label class="btn btn-outline-light">
-        <input type="radio" name="pick" value="home" required> 主隊 {{ game.home_team.abbr }}
+
+      <label class="btn btn-outline-light d-flex align-items-center gap-2">
+        <input type="radio" name="pick" value="home" required>
+        <img src="{% static 'team_logos/' %}{{ game.home_team.nba_team_id }}.svg"
+             style="height:20px;width:auto" alt=""
+             onerror="this.style.display='none'">
+        主隊 {{ game.home_team.abbr|default:game.home_team.name }}
       </label>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">下注金額</label>
+      <label class="form-label fw-semibold">下注金額</label>
       <input class="form-control" type="number" name="stake" min="1" step="1" required>
+      <div class="text-muted small mt-1">範例：100、200（以錢包餘額為上限）</div>
     </div>
 
-    <button class="btn btn-warning">送出下注</button>
-    <a class="btn btn-outline-light" href="{% url 'games:list' %}">返回</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-warning">送出下注</button>
+      <a class="btn btn-outline-light" href="{% url 'games:list' %}">返回</a>
+    </div>
   </form>
 </div>
 {% endblock %}

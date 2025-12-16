@@ -1,27 +1,152 @@
 {% extends "base.html" %}
+{% load static %}
+{% load tz %}
 {% block title %}Home{% endblock %}
+
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h2 class="m-0">🏀 NBA Betting Game</h2>
-  <div class="d-flex gap-2">
-    <a class="btn btn-sm btn-outline-light" href="{% url 'games:list' %}">前往賽程</a>
-    <a class="btn btn-sm btn-outline-light" href="{% url 'leaderboard:current' %}">排行榜</a>
+<div class="d-flex align-items-end justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h3 class="mb-1">🏀 NBA Betting Dashboard</h3>
+    <div class="text-muted small">快速下注、看排行、逛商店</div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-ghost" href="{% url 'games:list' %}">看完整賽程</a>
+    <a class="btn btn-ghost" href="{% url 'shop:list' %}">前往商店</a>
+    <a class="btn btn-ghost" href="{% url 'leaderboard:current' %}">本月排行榜</a>
+    {% if user.is_authenticated %}
+      <a class="btn btn-accent" href="{% url 'accounts:wallet' %}">
+        錢包{% if wallet %}：{{ wallet.balance }}{% endif %}
+      </a>
+    {% endif %}
   </div>
 </div>
 
-<div class="card p-3">
-  <h5 class="mb-2">即將開賽</h5>
-  {% if upcoming %}
-    <ul class="list-group list-group-flush">
-      {% for g in upcoming %}
-        <li class="list-group-item bg-transparent text-light d-flex justify-content-between">
-          <span>{{ g.away_team.abbr }} @ {{ g.home_team.abbr }}</span>
-          <a class="btn btn-sm btn-warning" href="{% url 'games:detail' g.id %}">下注</a>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <div class="text-muted">目前沒有即將開賽的比賽（先去同步賽程）</div>
-  {% endif %}
+<div class="row g-3">
+  <!-- Upcoming -->
+  <div class="col-12 col-lg-7">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h5 class="mb-0">⏳ 即將開賽</h5>
+        <div class="text-muted small">顯示 8 場</div>
+      </div>
+
+      <div class="table-responsive mt-3">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th style="width:150px;">時間</th>
+              <th>對戰</th>
+              <th class="text-end" style="width:110px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for g in upcoming %}
+            <tr>
+              <td class="text-muted small">
+                {{ g.start_time_utc|localtime|date:"m/d H:i" }}
+              </td>
+              <td>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <div class="d-flex align-items-center gap-2">
+                    <img src="{% static 'team_logos/' %}{{ g.away_team.nba_team_id }}.svg"
+                         style="height:22px;width:auto" alt="{{ g.away_team.name }}"
+                         onerror="this.style.display='none'">
+                    <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
+                  </div>
+
+                  <span class="text-muted">@</span>
+
+                  <div class="d-flex align-items-center gap-2">
+                    <img src="{% static 'team_logos/' %}{{ g.home_team.nba_team_id }}.svg"
+                         style="height:22px;width:auto" alt="{{ g.home_team.name }}"
+                         onerror="this.style.display='none'">
+                    <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
+                  </div>
+                </div>
+              </td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-accent" href="{% url 'games:detail' g.id %}">下注</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-muted">沒有即將開賽的資料（先跑 sync_nba_schedule）</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="col-12 col-lg-5">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h5 class="mb-0">🏆 本月排行榜</h5>
+        <div class="text-muted small">{{ year }}/{{ month }}</div>
+      </div>
+
+      <div class="table-responsive mt-3">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th style="width:60px;">#</th>
+              <th>玩家</th>
+              <th class="text-end" style="width:90px;">分數</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for row in top10 %}
+            <tr>
+              <td class="text-muted small">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ row.user.username }}</td>
+              <td class="text-end fw-semibold">{{ row.points }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-muted">本月尚無排行資料</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-2">
+        <a class="btn btn-sm btn-ghost" href="{% url 'leaderboard:current' %}">看更多</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shop -->
+  <div class="col-12">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h5 class="mb-0">🛒 商店精選</h5>
+        <a class="btn btn-sm btn-ghost" href="{% url 'shop:list' %}">全部商品</a>
+      </div>
+
+      <div class="row g-3 mt-1">
+        {% for it in featured_items %}
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card p-3">
+              <div class="d-flex align-items-start justify-content-between gap-2">
+                <div>
+                  <div class="fw-bold">{{ it.name }}</div>
+                  <div class="text-muted small">{{ it.code }}</div>
+                </div>
+                <span class="badge bg-warning text-dark">{{ it.price }}</span>
+              </div>
+              {% if it.description %}
+                <div class="text-muted small mt-2">{{ it.description }}</div>
+              {% endif %}
+              <div class="mt-3">
+                <a class="btn btn-sm btn-accent" href="{% url 'shop:list' %}">去購買</a>
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          <div class="text-muted">商店目前沒有商品</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

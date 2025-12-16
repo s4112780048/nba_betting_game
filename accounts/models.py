@@ -34,3 +34,14 @@ def wallet_add(wallet: Wallet, amount: int, tx_type: str, note: str = ""):
         w.save(update_fields=["balance"])
         WalletTx.objects.create(wallet=w, type=tx_type, amount=amount, note=note)
         return w
+
+from django.conf import settings
+from django.db import models
+
+class DailyCheckin(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    last_claim_date = models.DateField(null=True, blank=True)
+    streak = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.user} streak={self.streak} last={self.last_claim_date}"

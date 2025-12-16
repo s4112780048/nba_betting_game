@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Shop{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h3 class="mb-0">🛒 商店</h3>
+  {% if user.is_authenticated %}
+    <a class="btn btn-ghost" href="{% url 'shop:inventory' %}">🎒 背包</a>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  {% for it in items %}
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="card p-3 h-100">
+        <div class="d-flex align-items-start justify-content-between gap-2">
+          <div>
+            <div class="fw-bold">{{ it.name }}</div>
+            <div class="text-muted small">{{ it.code }} • {{ it.kind }}</div>
+          </div>
+          <span class="badge bg-warning text-dark">{{ it.price }}</span>
+        </div>
+
+        {% if it.description %}
+          <div class="text-muted small mt-2">{{ it.description }}</div>
+        {% endif %}
+
+        {% if user.is_authenticated %}
+          <form class="mt-3" method="post" action="{% url 'shop:buy' it.id %}">
+            {% csrf_token %}
+            <button class="btn btn-accent btn-sm w-100">購買</button>
+          </form>
+        {% else %}
+          <div class="mt-3 text-muted small">登入後才能購買</div>
+        {% endif %}
+      </div>
+    </div>
+  {% empty %}
+    <div class="text-muted">商店目前沒有商品</div>
+  {% endfor %}
+</div>
+{% endblock %}

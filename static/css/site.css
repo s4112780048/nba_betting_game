@@ -1,43 +1,64 @@
 :root{
-  --bg0:#070a12;
-  --bg1:#0b1220;
-  --panel: rgba(17,24,39,.78);
-  --border: rgba(148,163,184,.18);
-  --text:#e6edf7;
-  --muted:#9fb0c3;
-  --accent1:#f59e0b;
-  --accent2:#fbbf24;
-  --shadow: 0 18px 50px rgba(0,0,0,.40);
+  --bg0:#f7f9ff;
+  --bg1:#eef2ff;
+  --panel: rgba(255,255,255,.90);
+  --border: rgba(15,23,42,.10);
+
+  --text:#0f172a;
+  --muted:#475569;
+
+  --accent:#2563eb;
+  --accent2:#f97316;
+  --shadow: 0 18px 45px rgba(15,23,42,.10);
 }
 
 body{
   background:
-    radial-gradient(1200px circle at 10% 10%, rgba(56,189,248,0.14), transparent 42%),
-    radial-gradient(900px circle at 90% 18%, rgba(251,191,36,0.10), transparent 45%),
+    radial-gradient(1200px circle at 10% 10%, rgba(37,99,235,0.12), transparent 45%),
+    radial-gradient(900px circle at 90% 18%, rgba(249,115,22,0.10), transparent 45%),
     linear-gradient(180deg, var(--bg0), var(--bg1));
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 }
 
-a{ color: rgba(56,189,248,.95); text-decoration: none; }
+a{ color: rgba(37,99,235,.95); text-decoration: none; }
 a:hover{ text-decoration: underline; }
 
+.text-muted{ color: var(--muted) !important; }
+.text-dark{ color: var(--text) !important; }
+.text-light{ color: var(--text) !important; }
+
+/* ✅ Fallback：就算 Bootstrap 沒載到，btn 也長得像按鈕 */
+a.btn, button.btn, input.btn{
+  display:inline-block;
+  padding:.45rem .80rem;
+  border-radius:.65rem;
+  border: 1px solid rgba(15,23,42,.12);
+  text-decoration:none !important;
+  font-weight:700;
+  line-height:1.2;
+}
+
+/* Navbar */
 .navbar{
-  background: rgba(10,14,22,.62) !important;
+  background: rgba(255,255,255,.78) !important;
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
+.navbar .navbar-brand,
+.navbar .nav-link{ color: var(--text) !important; }
 
 .brand-dot{
   display:inline-block;
   width:10px; height:10px;
   border-radius:999px;
-  background: linear-gradient(135deg, var(--accent1), var(--accent2));
-  box-shadow: 0 0 0 6px rgba(251,191,36,.12);
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 0 0 6px rgba(37,99,235,.10);
   margin-right:10px;
   transform: translateY(-1px);
 }
 
+/* Cards */
 .card{
   background: var(--panel);
   border: 1px solid var(--border);
@@ -45,51 +66,47 @@ a:hover{ text-decoration: underline; }
   box-shadow: var(--shadow);
 }
 
-.table{
-  color: var(--text);
-  margin-bottom: 0;
-}
+/* Tables（就算模板用了 table-dark 也要變可讀） */
+.table, .table th, .table td{ color: var(--text) !important; }
 .table-dark{
   --bs-table-bg: transparent;
-  --bs-table-striped-bg: rgba(255,255,255,0.03);
-  --bs-table-hover-bg: rgba(255,255,255,0.05);
-  --bs-table-border-color: rgba(148,163,184,.18);
+  --bs-table-striped-bg: rgba(15,23,42,0.03);
+  --bs-table-hover-bg: rgba(15,23,42,0.05);
+  --bs-table-border-color: rgba(15,23,42,0.12);
+  --bs-table-color: var(--text);
+  color: var(--text) !important;
 }
 
-.text-muted{ color: var(--muted) !important; }
-
-.btn-ghost{
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(226,232,240,0.16);
-  color: var(--text);
-}
-.btn-ghost:hover{
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(226,232,240,0.22);
-}
-
-.btn-accent{
-  background: linear-gradient(135deg, var(--accent1), var(--accent2));
-  border: 0;
-  color: #111827;
-  font-weight: 800;
-}
-.btn-accent:hover{ filter: brightness(1.05); }
-
+/* Forms */
 .form-control, .form-select{
-  background: rgba(2,6,23,.35);
+  background: rgba(255,255,255,.92);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 12px;
 }
 .form-control:focus, .form-select:focus{
-  border-color: rgba(251,191,36,.55);
-  box-shadow: 0 0 0 .25rem rgba(251,191,36,.14);
+  border-color: rgba(37,99,235,.45);
+  box-shadow: 0 0 0 .25rem rgba(37,99,235,.12);
 }
 
+/* Alerts */
 .soft-alert{
   border-radius: 14px;
-  border: 1px solid rgba(148,163,184,.18);
-  background: rgba(15,23,42,.6);
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.80);
   color: var(--text);
+}
+
+/* Buttons */
+.btn-ghost{
+  background: rgba(255,255,255,0.70);
+  border: 1px solid rgba(15,23,42,0.12);
+  color: var(--text) !important;
+}
+.btn-ghost:hover{ background: rgba(255,255,255,0.90); }
+
+.btn-accent{
+  background: linear-gradient(135deg, var(--accent), #3b82f6);
+  border: 0 !important;
+  color: #ffffff !important;
 }
