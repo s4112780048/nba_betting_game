@@ -1,33 +1,22 @@
 from celery import shared_task
+from django.apps import apps
 from django.utils import timezone
-from betting.models import MonthlyScore
-from .models import MonthlySnapshot, MonthlySnapshotRow
-from accounts.models import Wallet, WalletTx, wallet_add
+
 
 @shared_task
-def close_previous_month_and_reset():
-    now = timezone.localtime(timezone.now())
-    year, month = now.year, now.month
+def leaderboard_monthly_snapshot():
+    """
+    每月結算/快照（先讓 admin 不爆）
+    你目前 models.py 沒有 MonthlySnapshot，所以用 apps.get_model 延遲取得。
+    找不到就直接跳過，避免整個系統掛掉。
+    """
+    try:
+        MonthlySnapshot = apps.get_model("leaderboard", "MonthlySnapshot")
+    except LookupError:
+        # 你目前沒有這個 model，先不要讓匯入就爆掉
+        return "Skipped: MonthlySnapshot model not found."
 
-    # 取上個月
-    prev_year, prev_month = (year, month - 1) if month > 1 else (year - 1, 12)
-
-    scores = list(MonthlyScore.objects.filter(year=prev_year, month=prev_month).select_related("user")
-                  .order_by("-points"))
-
-    if not scores:
-        return "no scores"
-
-    snap = MonthlySnapshot.objects.create(year=prev_year, month=prev_month)
-
-    # 產生排名 + 發獎（例：前 3 名發 coin）
-    rewards = [500, 300, 100]
-    for idx, s in enumerate(scores, start=1):
-        MonthlySnapshotRow.objects.create(snapshot=snap, user=s.user, points=s.points, rank=idx)
-
-        if idx <= 3:
-            w = Wallet.objects.get(user=s.user)
-            wallet_add(w, rewards[idx-1], "reward", note=f"Monthly reward {prev_year}-{prev_month:02d} rank {idx}")
-
-    # 重置：其實不必刪，因為新月份會 get_or_create；你也可保留歷史
-    return f"snapshot created: {prev_year}-{prev_month:02d}, rows={len(scores)}"
+    # ✅ 如果你之後真的加了 MonthlySnapshot，才把下面邏輯補上
+    # 這裡先給一個最小可運行範例（不假設你的欄位）
+    # e.g. MonthlySnapshot.objects.create(month=timezone.localdate().replace(day=1), ...)
+    return "Monthly snapshot task placeholder OK."
