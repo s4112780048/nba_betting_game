@@ -112,7 +112,7 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_TIMEZONE = TIME_ZONE
 
 # Zeabur / HTTPS
-CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if os.getenv("CSRF_TRUSTED_ORIGINS") else []
+CSRF_TRUSTED_ORIGINS = ["https://nbabettinggame.zeabur.app"]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # allauth
@@ -138,3 +138,7 @@ SOCIALACCOUNT_PROVIDERS = {
         "SCOPE": ["profile", "email"],
     }
 }
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
