@@ -1,4 +1,7 @@
 {
+  "python": {
+    "version": "3.12"
+  },
   "build_command": "python manage.py collectstatic --noinput",
   "start_command": "python manage.py migrate --noinput && _startup"
 }
