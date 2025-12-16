@@ -1,109 +1,88 @@
 from django.core.management.base import BaseCommand
-from django.utils.dateparse import parse_datetime
+from django.db import transaction
+from django.utils import timezone
 
 from games.models import Team, Game
-from games.nba_client import fetch_schedule
-
 
 class Command(BaseCommand):
-    help = "Sync NBA schedule from NBA CDN (safe version: no NULL team name)"
-
-    def _safe_str(self, v) -> str:
-        return v if isinstance(v, str) and v.strip() else ""
-
-    def _safe_team_name(self, t: dict) -> str:
-        """
-        保證回傳「非空字串」，避免寫入 DB 時觸發 NOT NULL constraint
-        """
-        name = self._safe_str(t.get("teamName"))
-        city = self._safe_str(t.get("teamCity"))
-        abbr = self._safe_str(t.get("teamTricode"))
-        tid = t.get("teamId")
-
-        # teamName 可能拿不到，就用 city / abbr / Team <id> 當備援
-        return name or city or abbr or f"Team {tid}"
+    help = "Sync NBA schedule (DO NOT overwrite scores)."
 
     def handle(self, *args, **options):
-        data = fetch_schedule()
-        league = (data or {}).get("leagueSchedule", {})
-        game_dates = league.get("gameDates", [])
+        # TODO: 這裡用你原本抓 schedule 的程式碼拿到 games_data
+        # games_data = [...]
+        games_data = []  # 你把這行換成你原本的資料來源
 
-        created_games, updated_games = 0, 0
-        created_teams, updated_teams = 0, 0
+        created_teams = updated_teams = 0
+        created_games = updated_games = 0
         skipped = 0
 
-        for gd in game_dates:
-            games = (gd or {}).get("games", [])
-            for g in games:
-                game_id = g.get("gameId")
-                dt_str = g.get("gameDateTimeUTC")
+        for g in games_data:
+            try:
+                # TODO: 你要用你原本的欄位來源填這些值
+                game_id = str(g["game_id"])
+                start_time = g["start_time_utc"]  # aware datetime (UTC)
+                home_id = int(g["home_team_id"])
+                away_id = int(g["away_team_id"])
 
-                if not game_id or not dt_str:
-                    skipped += 1
-                    continue
+                home_abbr = g.get("home_abbr", "")
+                away_abbr = g.get("away_abbr", "")
+                home_name = g.get("home_name") or home_abbr or f"TEAM_{home_id}"
+                away_name = g.get("away_name") or away_abbr or f"TEAM_{away_id}"
+                home_city = g.get("home_city", "")
+                away_city = g.get("away_city", "")
 
-                start_utc = parse_datetime(dt_str.replace("Z", "+00:00"))
-                if start_utc is None:
-                    skipped += 1
-                    continue
+                with transaction.atomic():
+                    home_team, hc = Team.objects.update_or_create(
+                        nba_team_id=home_id,
+                        defaults={"name": home_name, "city": home_city, "abbr": home_abbr},
+                    )
+                    away_team, ac = Team.objects.update_or_create(
+                        nba_team_id=away_id,
+                        defaults={"name": away_name, "city": away_city, "abbr": away_abbr},
+                    )
+                    created_teams += int(hc) + int(ac)
+                    updated_teams += int(not hc) + int(not ac)
 
-                away = g.get("awayTeam") or {}
-                home = g.get("homeTeam") or {}
+                    # ✅ 關鍵：用 get_or_create，已存在就不要把比分/勝負覆蓋成 0
+                    obj, created = Game.objects.get_or_create(
+                        nba_game_id=game_id,
+                        defaults={
+                            "start_time_utc": start_time,
+                            "status": 1,  # scheduled
+                            "home_team": home_team,
+                            "away_team": away_team,
+                            "home_score": 0,
+                            "away_score": 0,
+                            "winner": None,
+                        },
+                    )
 
-                away_id = away.get("teamId")
-                home_id = home.get("teamId")
-                if not away_id or not home_id:
-                    skipped += 1
-                    continue
+                    if created:
+                        created_games += 1
+                    else:
+                        # ✅ 已存在：只更新「賽程資訊」
+                        changed = False
+                        if obj.start_time_utc != start_time:
+                            obj.start_time_utc = start_time
+                            changed = True
+                        if obj.home_team_id != home_team.id:
+                            obj.home_team = home_team
+                            changed = True
+                        if obj.away_team_id != away_team.id:
+                            obj.away_team = away_team
+                            changed = True
 
-                # --- Team: away ---
-                away_team, away_created = Team.objects.update_or_create(
-                    nba_team_id=int(away_id),
-                    defaults={
-                        "name": self._safe_team_name(away),
-                        "city": self._safe_str(away.get("teamCity")),
-                        "abbr": self._safe_str(away.get("teamTricode")),
-                    },
-                )
-                created_teams += int(away_created)
-                updated_teams += int(not away_created)
+                        if changed:
+                            obj.save(update_fields=["start_time_utc", "home_team", "away_team"])
+                            updated_games += 1
 
-                # --- Team: home ---
-                home_team, home_created = Team.objects.update_or_create(
-                    nba_team_id=int(home_id),
-                    defaults={
-                        "name": self._safe_team_name(home),
-                        "city": self._safe_str(home.get("teamCity")),
-                        "abbr": self._safe_str(home.get("teamTricode")),
-                    },
-                )
-                created_teams += int(home_created)
-                updated_teams += int(not home_created)
-
-                # --- Game ---
-                status = g.get("gameStatus", 1)
-                try:
-                    status = int(status)
-                except Exception:
-                    status = 1
-
-                obj, is_created = Game.objects.update_or_create(
-                    nba_game_id=str(game_id),
-                    defaults={
-                        "start_time_utc": start_utc,
-                        "home_team": home_team,
-                        "away_team": away_team,
-                        "status": status,
-                    },
-                )
-                created_games += int(is_created)
-                updated_games += int(not is_created)
+            except Exception as e:
+                skipped += 1
+                continue
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Schedule synced. "
-                f"teams(created={created_teams}, updated={updated_teams}) "
-                f"games(created={created_games}, updated={updated_games}) "
-                f"skipped={skipped}"
+                f"Schedule synced. teams(created={created_teams}, updated={updated_teams}) "
+                f"games(created={created_games}, updated={updated_games}) skipped={skipped}"
             )
         )

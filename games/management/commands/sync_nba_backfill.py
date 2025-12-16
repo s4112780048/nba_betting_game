@@ -40,13 +40,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, default=14, help="How many days back to sync (default 14).")
-        parser.add_argument("--sleep", type=float, default=0.15, help="Sleep seconds between requests.")
+        parser.add_argument("--sleep", type=float, default=0.20, help="Sleep seconds between requests.")
         parser.add_argument("--timeout", type=float, default=12.0, help="HTTP timeout seconds.")
+        parser.add_argument("--quiet", action="store_true", help="Less per-day logs.")
 
     def handle(self, *args, **options):
         days = max(1, int(options["days"]))
-        sleep_s = float(options["sleep"])
+        sleep_s = max(0.0, float(options["sleep"]))
         timeout = float(options["timeout"])
+        quiet = bool(options["quiet"])
 
         session = requests.Session()
         session.headers.update(
@@ -58,6 +60,7 @@ class Command(BaseCommand):
             }
         )
 
+        # ✅ Django timezone.now() is aware (UTC if USE_TZ=True). We normalize to UTC date safely.
         today_utc = timezone.now().astimezone(dt_timezone.utc).date()
         start_date = today_utc - timedelta(days=days)
 
@@ -67,6 +70,7 @@ class Command(BaseCommand):
         updated_teams = 0
         skipped_days = 0
         skipped_games = 0
+        http_403 = 0
 
         self.stdout.write(f"Backfill from {start_date} to {today_utc} (UTC), days={days}")
 
@@ -77,9 +81,12 @@ class Command(BaseCommand):
 
             try:
                 r = session.get(url, timeout=timeout)
+                if r.status_code == 403:
+                    http_403 += 1
                 if r.status_code != 200:
                     skipped_days += 1
-                    self.stdout.write(self.style.WARNING(f"[SKIP] {yyyymmdd} status={r.status_code}"))
+                    if not quiet:
+                        self.stdout.write(self.style.WARNING(f"[SKIP] {yyyymmdd} status={r.status_code}"))
                     d += timedelta(days=1)
                     time.sleep(sleep_s)
                     continue
@@ -88,7 +95,8 @@ class Command(BaseCommand):
                 games = (payload.get("scoreboard") or {}).get("games") or []
             except Exception as e:
                 skipped_days += 1
-                self.stdout.write(self.style.WARNING(f"[SKIP] {yyyymmdd} error={e}"))
+                if not quiet:
+                    self.stdout.write(self.style.WARNING(f"[SKIP] {yyyymmdd} error={e}"))
                 d += timedelta(days=1)
                 time.sleep(sleep_s)
                 continue
@@ -120,6 +128,14 @@ class Command(BaseCommand):
                     home_city = (home.get("teamCity") or "").strip()
                     away_city = (away.get("teamCity") or "").strip()
 
+                    start_time = _parse_utc_iso(g.get("gameTimeUTC") or "")
+                    if start_time is None:
+                        # fallback: noon UTC that day
+                        start_time = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=dt_timezone.utc)
+
+                    home_score = _safe_int(home.get("score"), 0)
+                    away_score = _safe_int(away.get("score"), 0)
+
                     with transaction.atomic():
                         home_team, home_created = Team.objects.update_or_create(
                             nba_team_id=home_id,
@@ -129,16 +145,8 @@ class Command(BaseCommand):
                             nba_team_id=away_id,
                             defaults={"name": away_name, "city": away_city, "abbr": away_abbr},
                         )
-
                         created_teams += int(home_created) + int(away_created)
                         updated_teams += int(not home_created) + int(not away_created)
-
-                        start_time = _parse_utc_iso(g.get("gameTimeUTC") or "")
-                        if start_time is None:
-                            start_time = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=dt_timezone.utc)
-
-                        home_score = _safe_int(home.get("score"), 0)
-                        away_score = _safe_int(away.get("score"), 0)
 
                         winner = None
                         if status == 3:  # final
@@ -168,9 +176,14 @@ class Command(BaseCommand):
                     skipped_games += 1
                     continue
 
-            self.stdout.write(f"[OK] {yyyymmdd} games={len(games)}")
+            if not quiet:
+                self.stdout.write(f"[OK] {yyyymmdd} games={len(games)}")
+
             d += timedelta(days=1)
             time.sleep(sleep_s)
+
+        if http_403 > 0:
+            self.stdout.write(self.style.WARNING(f"NOTE: got HTTP 403 {http_403} times (NBA CDN may rate-limit)."))
 
         self.stdout.write(
             self.style.SUCCESS(
