@@ -1,0 +1,17 @@
+# python / venv
+.venv/
+__pycache__/
+*.pyc
+
+# env secrets
+.env
+
+# db / local
+db.sqlite3
+*.log
+
+# static build
+staticfiles/
+
+# IDE
+.vscode/

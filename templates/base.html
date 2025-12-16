@@ -6,11 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}NBA Betting{% endblock %}</title>
 
-  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Your CSS (版本號破快取) -->
-  <link href="{% static 'css/site.css' %}?v=2002" rel="stylesheet">
+  <link href="{% static 'css/site.css' %}?v=3001" rel="stylesheet">
 </head>
 
 <body>
@@ -28,9 +25,9 @@
       {% if user.is_authenticated %}
         <a class="btn btn-sm btn-accent" href="{% url 'accounts:wallet' %}">錢包</a>
         <a class="btn btn-sm btn-ghost" href="{% url 'accounts:daily_bonus' %}">每日簽到</a>
-        <a class="btn btn-sm btn-outline-danger" href="{% url 'accounts:logout' %}">登出</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'account_logout' %}">登出</a>
       {% else %}
-        <a class="btn btn-sm btn-outline-primary" href="{% url 'accounts:login' %}">登入</a>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'account_login' %}">Google 登入</a>
       {% endif %}
     </div>
   </div>

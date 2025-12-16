@@ -4,8 +4,14 @@ whitenoise
 dj-database-url
 python-dotenv
 requests
-
+django-allauth
 celery
 redis
 django-celery-beat
 psycopg2-binary>=2.9.10
+channels
+channels-redis
+uvicorn
+PyJWT
+cryptography
+PyJWT>=2.8.0
