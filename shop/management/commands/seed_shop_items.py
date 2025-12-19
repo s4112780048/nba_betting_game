@@ -1,3 +1,4 @@
+# shop/management/commands/seed_shop_items.py
 from django.core.management.base import BaseCommand
 from shop.models import Badge, ShopItem
 

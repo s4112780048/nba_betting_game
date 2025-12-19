@@ -1,5 +1,4 @@
 # games/management/commands/sync_scores_espn.py
-
 import time
 from datetime import datetime, timedelta, timezone as dt_timezone
 
@@ -8,36 +7,28 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from games.models import Game
+from games.models import Team, Game
 
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 
-
-# ESPN team abbreviations sometimes differ from NBA tricode.
-ABBR_ALIAS = {
+# ✅ 縮寫統一（你問 Utah：ESPN 常見是 UTA；有些來源可能會變，這邊統一）
+ABBR_MAP = {
+    "UTH": "UTA",
+    "UTAH": "UTA",
+    "PHO": "PHX",
+    "BRK": "BKN",
+    "BKN": "BKN",
     "GS": "GSW",
-    "SA": "SAS",
     "NY": "NYK",
     "NO": "NOP",
-    "WSH": "WAS",
-    "PHO": "PHX",
-    "BK": "BKN",
-    "UTAH": "UTA",
-    "UTAJ": "UTA",
-    "JAZZ": "UTA",
 }
 
-
-def _norm_abbr(a: str) -> str:
-    a = (a or "").strip().upper()
-    return ABBR_ALIAS.get(a, a)
-
+def norm_abbr(x: str) -> str:
+    x = (x or "").strip().upper()
+    return ABBR_MAP.get(x, x)
 
 def _parse_iso_to_utc(s: str):
-    """
-    ESPN often returns ISO like: 2025-12-19T00:30Z or with offset
-    """
     if not s:
         return None
     try:
@@ -49,44 +40,36 @@ def _parse_iso_to_utc(s: str):
     except Exception:
         return None
 
-
 def _safe_int(v, default=0):
     try:
         return int(v)
     except Exception:
         return default
 
-
 def _map_status(espn_status: dict) -> int:
-    """
-    Return:
-      1 scheduled
-      2 live
-      3 final
-    """
     st = espn_status or {}
     typ = st.get("type") or {}
-    state = (typ.get("state") or "").lower()  # pre / in / post
+    state = (typ.get("state") or "").lower()   # pre / in / post
     completed = bool(typ.get("completed", False))
-
     if completed or state == "post":
         return 3
     if state == "in":
         return 2
     return 1
 
-
 class Command(BaseCommand):
-    help = "Sync scores/status from ESPN scoreboard for past N days (match by team abbr + time window + fallbacks)."
+    help = "Sync schedule/scores from ESPN for past N days and forward F days. Creates/updates games."
 
     def add_arguments(self, parser):
-        parser.add_argument("--days", type=int, default=3, help="How many days back to sync (default 3).")
+        parser.add_argument("--days", type=int, default=2, help="How many days back (default 2).")
+        parser.add_argument("--forward", type=int, default=7, help="How many days forward for schedule (default 7).")
         parser.add_argument("--sleep", type=float, default=0.25, help="Sleep seconds between requests.")
         parser.add_argument("--timeout", type=float, default=12.0, help="HTTP timeout seconds.")
         parser.add_argument("--quiet", action="store_true", help="Less logs.")
 
     def handle(self, *args, **options):
-        days = max(1, int(options["days"]))
+        days = max(0, int(options["days"]))
+        forward = max(0, int(options["forward"]))
         sleep_s = max(0.0, float(options["sleep"]))
         timeout = float(options["timeout"])
         quiet = bool(options["quiet"])
@@ -94,31 +77,32 @@ class Command(BaseCommand):
         session = requests.Session()
         session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (NBA Betting Django)",
+                "User-Agent": "Mozilla/5.0 (NBA Betting Django; ESPN Sync)",
                 "Accept": "application/json,text/plain,*/*",
+                "Referer": "https://www.espn.com/",
+                "Origin": "https://www.espn.com",
+                "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8",
             }
         )
 
         today_utc = timezone.now().astimezone(dt_timezone.utc).date()
         start_date = today_utc - timedelta(days=days)
+        end_date = today_utc + timedelta(days=forward)
 
-        matched = 0
-        updated = 0
+        created_games = 0
+        updated_games = 0
+        created_teams = 0
+        updated_teams = 0
         skipped_days = 0
         skipped_events = 0
 
-        self.stdout.write(f"ESPN sync from {start_date} to {today_utc} (UTC), days={days}")
+        self.stdout.write(f"ESPN sync {start_date} -> {end_date} (UTC). back={days} forward={forward}")
 
         d = start_date
-        while d <= today_utc:
+        while d <= end_date:
             yyyymmdd = d.strftime("%Y%m%d")
-
             try:
-                r = session.get(
-                    ESPN_SCOREBOARD_URL,
-                    params={"dates": yyyymmdd},
-                    timeout=timeout,
-                )
+                r = session.get(ESPN_SCOREBOARD_URL, params={"dates": yyyymmdd}, timeout=timeout)
                 if r.status_code != 200:
                     skipped_days += 1
                     if not quiet:
@@ -139,12 +123,17 @@ class Command(BaseCommand):
 
             for ev in events:
                 try:
+                    event_id = str(ev.get("id") or "").strip()
+                    if not event_id:
+                        skipped_events += 1
+                        continue
+
                     competitions = ev.get("competitions") or []
                     if not competitions:
                         skipped_events += 1
                         continue
-
                     comp = competitions[0]
+
                     competitors = comp.get("competitors") or []
                     if len(competitors) < 2:
                         skipped_events += 1
@@ -162,11 +151,11 @@ class Command(BaseCommand):
                         skipped_events += 1
                         continue
 
-                    home_team = home.get("team") or {}
-                    away_team = away.get("team") or {}
+                    ht = home.get("team") or {}
+                    at = away.get("team") or {}
 
-                    home_abbr = _norm_abbr(home_team.get("abbreviation"))
-                    away_abbr = _norm_abbr(away_team.get("abbreviation"))
+                    home_abbr = norm_abbr(ht.get("abbreviation") or "")
+                    away_abbr = norm_abbr(at.get("abbreviation") or "")
                     if not home_abbr or not away_abbr:
                         skipped_events += 1
                         continue
@@ -176,122 +165,63 @@ class Command(BaseCommand):
                         start_dt_utc = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=dt_timezone.utc)
 
                     status = _map_status(comp.get("status") or ev.get("status") or {})
-
                     home_score = _safe_int(home.get("score"), 0)
                     away_score = _safe_int(away.get("score"), 0)
 
-                    # Window: wider to handle your DB fallback noon UTC etc.
-                    lo = start_dt_utc - timedelta(hours=18)
-                    hi = start_dt_utc + timedelta(hours=18)
-
-                    # 1) Normal match by time window + abbr
-                    game = (
-                        Game.objects.select_related("home_team", "away_team")
-                        .filter(
-                            start_time_utc__gte=lo,
-                            start_time_utc__lte=hi,
-                            home_team__abbr__iexact=home_abbr,
-                            away_team__abbr__iexact=away_abbr,
-                        )
-                        .order_by("start_time_utc")
-                        .first()
-                    )
-
-                    reversed_match = False
-
-                    # 2) Reversed match (home/away swapped)
-                    if not game:
-                        game = (
-                            Game.objects.select_related("home_team", "away_team")
-                            .filter(
-                                start_time_utc__gte=lo,
-                                start_time_utc__lte=hi,
-                                home_team__abbr__iexact=away_abbr,
-                                away_team__abbr__iexact=home_abbr,
-                            )
-                            .order_by("start_time_utc")
-                            .first()
-                        )
-                        if game:
-                            reversed_match = True
-
-                    # 3) Fallback: same UTC date + abbr (normal)
-                    if not game:
-                        game = (
-                            Game.objects.select_related("home_team", "away_team")
-                            .filter(
-                                start_time_utc__date=start_dt_utc.date(),
-                                home_team__abbr__iexact=home_abbr,
-                                away_team__abbr__iexact=away_abbr,
-                            )
-                            .order_by("start_time_utc")
-                            .first()
-                        )
-
-                    # 4) Fallback: same UTC date + abbr (reversed)
-                    if not game:
-                        game = (
-                            Game.objects.select_related("home_team", "away_team")
-                            .filter(
-                                start_time_utc__date=start_dt_utc.date(),
-                                home_team__abbr__iexact=away_abbr,
-                                away_team__abbr__iexact=home_abbr,
-                            )
-                            .order_by("start_time_utc")
-                            .first()
-                        )
-                        if game:
-                            reversed_match = True
-
-                    if not game:
-                        skipped_events += 1
-                        continue
-
-                    # If reversed, swap scores so they land correctly in your DB schema
-                    if reversed_match:
-                        home_score, away_score = away_score, home_score
-
-                    matched += 1
+                    home_name = (ht.get("displayName") or "").strip()
+                    away_name = (at.get("displayName") or "").strip()
 
                     with transaction.atomic():
-                        changed = False
+                        home_team, home_created = Team.objects.update_or_create(
+                            abbr=home_abbr,
+                            defaults={"name": home_name, "city": ""},
+                        )
+                        away_team, away_created = Team.objects.update_or_create(
+                            abbr=away_abbr,
+                            defaults={"name": away_name, "city": ""},
+                        )
+                        created_teams += int(home_created) + int(away_created)
+                        updated_teams += int(not home_created) + int(not away_created)
 
-                        if game.status != status:
-                            game.status = status
-                            changed = True
-
-                        if game.home_score != home_score or game.away_score != away_score:
-                            game.home_score = home_score
-                            game.away_score = away_score
-                            changed = True
-
+                        winner = None
                         if status == 3:
-                            winner = None
                             if home_score > away_score:
-                                winner = game.home_team
+                                winner = home_team
                             elif away_score > home_score:
-                                winner = game.away_team
+                                winner = away_team
 
-                            if game.winner_id != (winner.id if winner else None):
-                                game.winner = winner
-                                changed = True
-
-                        if changed:
-                            game.save(update_fields=["status", "home_score", "away_score", "winner"])
-                            updated += 1
+                        obj, created = Game.objects.update_or_create(
+                            source="ESPN",
+                            source_game_id=event_id,
+                            defaults={
+                                "start_time_utc": start_dt_utc,
+                                "status": status,
+                                "home_team": home_team,
+                                "away_team": away_team,
+                                "home_score": home_score,
+                                "away_score": away_score,
+                                "winner": winner,
+                            },
+                        )
+                        if created:
+                            created_games += 1
+                        else:
+                            updated_games += 1
 
                 except Exception:
                     skipped_events += 1
                     continue
 
             if not quiet:
-                self.stdout.write(f"[OK] {yyyymmdd} events={len(events)} matched={matched} updated={updated}")
+                self.stdout.write(f"[OK] {yyyymmdd} events={len(events)}")
 
             d += timedelta(days=1)
             time.sleep(sleep_s)
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"ESPN sync done. matched={matched} updated={updated} skipped_days={skipped_days} skipped_events={skipped_events}"
+                f"ESPN sync done. teams(created={created_teams}, updated={updated_teams}) "
+                f"games(created={created_games}, updated={updated_games}) "
+                f"skipped_days={skipped_days} skipped_events={skipped_events}"
             )
         )

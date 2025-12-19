@@ -1,7 +1,10 @@
+# games/urls.py
 from django.urls import path
-from .views import game_list, game_detail
+from . import views
+
+app_name = "games"
 
 urlpatterns = [
-    path("", game_list, name="list"),
-    path("<int:game_id>/", game_detail, name="detail"),
+    path("", views.game_list, name="list"),
+    path("<int:game_id>/", views.game_detail, name="detail"),
 ]
