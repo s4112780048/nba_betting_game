@@ -1,3 +1,5 @@
+# games/management/commands/sync_scores_espn.py
+
 import time
 from datetime import datetime, timedelta, timezone as dt_timezone
 
@@ -6,10 +8,30 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from games.models import Game, Team
+from games.models import Game
 
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+
+
+# ESPN team abbreviations sometimes differ from NBA tricode.
+ABBR_ALIAS = {
+    "GS": "GSW",
+    "SA": "SAS",
+    "NY": "NYK",
+    "NO": "NOP",
+    "WSH": "WAS",
+    "PHO": "PHX",
+    "BK": "BKN",
+    "UTAH": "UTA",
+    "UTAJ": "UTA",
+    "JAZZ": "UTA",
+}
+
+
+def _norm_abbr(a: str) -> str:
+    a = (a or "").strip().upper()
+    return ABBR_ALIAS.get(a, a)
 
 
 def _parse_iso_to_utc(s: str):
@@ -44,7 +66,7 @@ def _map_status(espn_status: dict) -> int:
     """
     st = espn_status or {}
     typ = st.get("type") or {}
-    state = (typ.get("state") or "").lower()          # pre / in / post
+    state = (typ.get("state") or "").lower()  # pre / in / post
     completed = bool(typ.get("completed", False))
 
     if completed or state == "post":
@@ -55,7 +77,7 @@ def _map_status(espn_status: dict) -> int:
 
 
 class Command(BaseCommand):
-    help = "Sync scores/status from ESPN scoreboard for past N days (match by team abbr + time window)."
+    help = "Sync scores/status from ESPN scoreboard for past N days (match by team abbr + time window + fallbacks)."
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, default=3, help="How many days back to sync (default 3).")
@@ -72,12 +94,11 @@ class Command(BaseCommand):
         session = requests.Session()
         session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (NBA Betting Django; +https://example.com)",
+                "User-Agent": "Mozilla/5.0 (NBA Betting Django)",
                 "Accept": "application/json,text/plain,*/*",
             }
         )
 
-        # use UTC date range
         today_utc = timezone.now().astimezone(dt_timezone.utc).date()
         start_date = today_utc - timedelta(days=days)
 
@@ -116,7 +137,6 @@ class Command(BaseCommand):
                 time.sleep(sleep_s)
                 continue
 
-            # process events
             for ev in events:
                 try:
                     competitions = ev.get("competitions") or []
@@ -130,7 +150,6 @@ class Command(BaseCommand):
                         skipped_events += 1
                         continue
 
-                    # get home/away
                     home = None
                     away = None
                     for c in competitors:
@@ -146,15 +165,14 @@ class Command(BaseCommand):
                     home_team = home.get("team") or {}
                     away_team = away.get("team") or {}
 
-                    home_abbr = (home_team.get("abbreviation") or "").strip().upper()
-                    away_abbr = (away_team.get("abbreviation") or "").strip().upper()
+                    home_abbr = _norm_abbr(home_team.get("abbreviation"))
+                    away_abbr = _norm_abbr(away_team.get("abbreviation"))
                     if not home_abbr or not away_abbr:
                         skipped_events += 1
                         continue
 
                     start_dt_utc = _parse_iso_to_utc(comp.get("date") or ev.get("date") or "")
                     if start_dt_utc is None:
-                        # fallback: use that day noon UTC
                         start_dt_utc = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=dt_timezone.utc)
 
                     status = _map_status(comp.get("status") or ev.get("status") or {})
@@ -162,12 +180,11 @@ class Command(BaseCommand):
                     home_score = _safe_int(home.get("score"), 0)
                     away_score = _safe_int(away.get("score"), 0)
 
-                    # 🔥 Match to your existing Game (created by NBA CDN) using:
-                    # - same team abbreviations
-                    # - time window +- 12 hours around ESPN start time
-                    lo = start_dt_utc - timedelta(hours=12)
-                    hi = start_dt_utc + timedelta(hours=12)
+                    # Window: wider to handle your DB fallback noon UTC etc.
+                    lo = start_dt_utc - timedelta(hours=18)
+                    hi = start_dt_utc + timedelta(hours=18)
 
+                    # 1) Normal match by time window + abbr
                     game = (
                         Game.objects.select_related("home_team", "away_team")
                         .filter(
@@ -179,8 +196,11 @@ class Command(BaseCommand):
                         .order_by("start_time_utc")
                         .first()
                     )
+
+                    reversed_match = False
+
+                    # 2) Reversed match (home/away swapped)
                     if not game:
-                        # some feeds swap; try reversed just in case
                         game = (
                             Game.objects.select_related("home_team", "away_team")
                             .filter(
@@ -193,11 +213,43 @@ class Command(BaseCommand):
                             .first()
                         )
                         if game:
-                            # if reversed match, swap scores too
-                            home_score, away_score = away_score, home_score
-                        else:
-                            skipped_events += 1
-                            continue
+                            reversed_match = True
+
+                    # 3) Fallback: same UTC date + abbr (normal)
+                    if not game:
+                        game = (
+                            Game.objects.select_related("home_team", "away_team")
+                            .filter(
+                                start_time_utc__date=start_dt_utc.date(),
+                                home_team__abbr__iexact=home_abbr,
+                                away_team__abbr__iexact=away_abbr,
+                            )
+                            .order_by("start_time_utc")
+                            .first()
+                        )
+
+                    # 4) Fallback: same UTC date + abbr (reversed)
+                    if not game:
+                        game = (
+                            Game.objects.select_related("home_team", "away_team")
+                            .filter(
+                                start_time_utc__date=start_dt_utc.date(),
+                                home_team__abbr__iexact=away_abbr,
+                                away_team__abbr__iexact=home_abbr,
+                            )
+                            .order_by("start_time_utc")
+                            .first()
+                        )
+                        if game:
+                            reversed_match = True
+
+                    if not game:
+                        skipped_events += 1
+                        continue
+
+                    # If reversed, swap scores so they land correctly in your DB schema
+                    if reversed_match:
+                        home_score, away_score = away_score, home_score
 
                     matched += 1
 
@@ -213,13 +265,13 @@ class Command(BaseCommand):
                             game.away_score = away_score
                             changed = True
 
-                        # winner (final only)
                         if status == 3:
                             winner = None
                             if home_score > away_score:
                                 winner = game.home_team
                             elif away_score > home_score:
                                 winner = game.away_team
+
                             if game.winner_id != (winner.id if winner else None):
                                 game.winner = winner
                                 changed = True

@@ -1,45 +1,34 @@
 from django.shortcuts import render
 from django.utils import timezone
 
+from leaderboard.models import MonthlyScore, current_month_str
 from games.models import Game
-from shop.models import ShopItem
-from leaderboard.models import MonthlyScore
-from accounts.models import Wallet
 
 
 def home(request):
+    # 取即將開賽 & 最近比賽（讓首頁有內容）
     now = timezone.now()
-
     upcoming = (
         Game.objects.select_related("home_team", "away_team")
-        .filter(start_time_utc__gte=now)
-        .order_by("start_time_utc")[:8]
+        .filter(status=1, start_time_utc__gte=now)
+        .order_by("start_time_utc")[:10]
+    )
+    recent = (
+        Game.objects.select_related("home_team", "away_team")
+        .filter(status=3)
+        .order_by("-start_time_utc")[:10]
     )
 
     # 本月排行榜 Top 10
-    y, m = now.year, now.month
+    month = current_month_str()
     top10 = (
         MonthlyScore.objects.select_related("user")
-        .filter(year=y, month=m)
-        .order_by("-points")[:10]
+        .filter(month=month)
+        .order_by("-score", "user__username")[:10]
     )
-
-    # 商店精選
-    featured_items = ShopItem.objects.filter(active=True).order_by("price")[:6]
-
-    wallet = None
-    if request.user.is_authenticated:
-        wallet = Wallet.objects.filter(user=request.user).first()
 
     return render(
         request,
         "core/home.html",
-        {
-            "upcoming": upcoming,
-            "top10": top10,
-            "featured_items": featured_items,
-            "wallet": wallet,
-            "year": y,
-            "month": m,
-        },
+        {"upcoming": upcoming, "recent": recent, "month": month, "top10": top10},
     )

@@ -1,56 +1,40 @@
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import Wallet, wallet_add
-from .models import Bet, MonthlyScore
+from accounts.models import Wallet, WalletTx
+from games.models import Game, Team
+from .models import Bet
 
-def _month_key(dt):
-    local = timezone.localtime(dt)
-    return local.year, local.month
 
-def place_bet(user, game, pick_team, stake: int):
+def place_bet(user, game: Game, pick_team: Team, stake: int) -> Bet:
+    stake = int(stake)
     if stake <= 0:
-        raise ValueError("stake must be > 0")
-    if timezone.now() >= game.start_time_utc:
-        raise ValueError("Game already started")
+        raise ValueError("下注金額必須 > 0")
 
-    wallet = Wallet.objects.get(user=user)
+    # 只允許未開賽下注
+    if game.status != 1:
+        raise ValueError("此比賽已開賽/結束，無法下注")
+
+    if game.start_time_utc <= timezone.now():
+        raise ValueError("已超過開賽時間，無法下注")
+
+    # pick_team 必須是主/客其中之一
+    if pick_team_id := getattr(pick_team, "id", None):
+        if pick_team_id not in (game.home_team_id, game.away_team_id):
+            raise ValueError("下注隊伍不屬於此場比賽")
+    else:
+        raise ValueError("pick_team 不合法")
 
     with transaction.atomic():
-        wallet_add(wallet, -stake, "bet", note=f"Bet {stake} on {pick_team} (game {game.nba_game_id})")
+        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user, defaults={"balance": 0})
+        if wallet.balance < stake:
+            raise ValueError("餘額不足")
+
+        # 扣錢
+        wallet.balance -= stake
+        wallet.save(update_fields=["balance"])
+        WalletTx.objects.create(wallet=wallet, type="bet_place", amount=-stake, note=f"Bet on game={game.id}")
+
         bet = Bet.objects.create(user=user, game=game, pick_team=pick_team, stake=stake)
+
     return bet
-
-def settle_game_if_final(game):
-    if game.status != 3 or not game.winner_id:
-        return
-
-    bets = Bet.objects.select_for_update().filter(game=game, status=Bet.Status.PENDING).select_related("user")
-
-    if not bets.exists():
-        return
-
-    with transaction.atomic():
-        for bet in bets:
-            win = (bet.pick_team_id == game.winner_id)
-
-            base_points = 10 + bet.stake // 10
-
-            if win:
-                payout = bet.stake * 2  # 簡化：贏就 2 倍返還（含本金）
-                wallet_add(Wallet.objects.get(user=bet.user), payout, "payout",
-                           note=f"Win bet (game {game.nba_game_id})")
-                bet.status = Bet.Status.WON
-                bet.payout = payout
-                bet.points = base_points
-            else:
-                bet.status = Bet.Status.LOST
-                bet.payout = 0
-                bet.points = max(1, base_points // 4)
-
-            bet.save(update_fields=["status", "payout", "points"])
-
-            y, m = _month_key(bet.placed_at)
-            ms, _ = MonthlyScore.objects.get_or_create(user=bet.user, year=y, month=m)
-            ms.points += bet.points
-            ms.save(update_fields=["points"])
