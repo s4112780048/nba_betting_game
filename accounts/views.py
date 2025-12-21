@@ -1,65 +1,67 @@
-from datetime import timedelta
+﻿from __future__ import annotations
 
 from django.contrib import messages
-from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
-from django.shortcuts import render, redirect
-from django.utils import timezone
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect, render
 
-from .models import DailyCheckin, Wallet, WalletTx
-
-
-def login_view(request):
-    """
-    ✅ 只留 Google 登入：這頁只顯示 Google 登入按鈕
-    Google 的實際 OAuth 路由走 allauth（在 /auth/ 底下）
-    """
-    if request.user.is_authenticated:
-        return redirect("core:home")
-
-    next_url = request.GET.get("next") or ""
-    return render(request, "accounts/login.html", {"next": next_url})
+from .models import Transaction, get_or_create_wallet, wallet_add, wallet_sub
 
 
-def logout_view(request):
-    logout(request)
-    return redirect("core:home")
+# === 兼容舊路由：/accounts/login/ /accounts/signup/ /accounts/logout/ ===
+def login_view(request: HttpRequest) -> HttpResponse:
+    return redirect("account_login")   # allauth
 
 
+def signup_view(request: HttpRequest) -> HttpResponse:
+    return redirect("account_signup")  # allauth
+
+
+def logout_view(request: HttpRequest) -> HttpResponse:
+    return redirect("account_logout")  # allauth
+
+
+# === Wallet ===
 @login_required
-def wallet_view(request):
-    wallet, _ = Wallet.objects.get_or_create(user=request.user, defaults={"balance": 1000})
-    txs = wallet.txs.all().order_by("-id")[:50]
+def wallet_view(request: HttpRequest) -> HttpResponse:
+    wallet = get_or_create_wallet(request.user)
+    txs = Transaction.objects.filter(wallet=wallet).order_by("-created_at")[:50]
     return render(request, "accounts/wallet.html", {"wallet": wallet, "txs": txs})
 
 
 @login_required
-def daily_bonus(request):
-    today = timezone.localdate()
+def deposit(request: HttpRequest) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("accounts:wallet")
 
-    with transaction.atomic():
-        chk, _ = DailyCheckin.objects.select_for_update().get_or_create(user=request.user)
+    try:
+        amount = int(request.POST.get("amount", "0"))
+        if amount <= 0:
+            raise ValueError("amount must be > 0")
 
-        if chk.last_claim_date == today:
-            messages.info(request, "今天已經領過每日簽到了。")
-            return redirect("accounts:wallet")
+        wallet = get_or_create_wallet(request.user)
+        wallet_add(wallet, amount, tx_type="deposit", ref="manual")
+        messages.success(request, f"已儲值 {amount}")
+    except Exception as e:
+        messages.error(request, f"儲值失敗：{e}")
 
-        if chk.last_claim_date == today - timedelta(days=1):
-            chk.streak += 1
-        else:
-            chk.streak = 1
+    return redirect("accounts:wallet")
 
-        chk.last_claim_date = today
-        chk.save()
 
-        bonus = min(100 + (chk.streak - 1) * 20, 300)
+@login_required
+def withdraw(request: HttpRequest) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("accounts:wallet")
 
-        w, _ = Wallet.objects.get_or_create(user=request.user, defaults={"balance": 1000})
-        w.balance += bonus
-        w.save()
+    try:
+        amount = int(request.POST.get("amount", "0"))
+        if amount <= 0:
+            raise ValueError("amount must be > 0")
 
-        WalletTx.objects.create(wallet=w, type="daily_bonus", amount=bonus, note=f"Daily bonus streak={chk.streak}")
+        wallet = get_or_create_wallet(request.user)
+        wallet_sub(wallet, amount, tx_type="withdraw", ref="manual")
+        messages.success(request, f"已提領 {amount}")
+    except Exception as e:
+        messages.error(request, f"提領失敗：{e}")
 
-    messages.success(request, f"✅ 簽到成功！獲得 {bonus} 金幣（連續 {chk.streak} 天）")
     return redirect("accounts:wallet")
