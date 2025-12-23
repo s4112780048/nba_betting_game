@@ -1,16 +1,37 @@
 {% extends "base.html" %}
-{% load socialaccount %}
 {% block title %}Login{% endblock %}
+
 {% block content %}
 <div class="card p-4" style="max-width:520px;margin:0 auto;">
   <h4 class="mb-3">登入</h4>
-  <p class="text-muted mb-3">本專案僅提供 Google 登入。</p>
 
-  <a class="btn btn-accent w-100"
-     href="{% provider_login_url 'google' next=next %}">
-    使用 Google 登入
-  </a>
+  {% if form.errors %}
+    <div class="alert alert-danger soft-alert">
+      帳號或密碼錯誤，請再試一次。
+    </div>
+  {% endif %}
 
-  <a class="btn btn-ghost w-100 mt-2" href="{% url 'core:home' %}">返回首頁</a>
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">帳號</label>
+      <input class="form-control" type="text" name="username" required autofocus>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">密碼</label>
+      <input class="form-control" type="password" name="password" required>
+    </div>
+
+    {# ✅ 內建 auth 需要 next 才能導回原頁 #}
+    {% if next %}
+      <input type="hidden" name="next" value="{{ next }}">
+    {% endif %}
+
+    <button class="btn btn-accent w-100" type="submit">登入</button>
+  </form>
+
+  <a class="btn btn-ghost w-100 mt-2" href="{% url 'home' %}">返回首頁</a>
 </div>
 {% endblock %}

@@ -1,63 +1,112 @@
 {% extends "base.html" %}
+{% load tz %}
 {% load static %}
-{% block title %}Game{% endblock %}
+
+{% block title %}比賽詳情{% endblock %}
 
 {% block content %}
-<div class="card p-4">
-  <!-- 對戰標題 + Logo -->
-  <div class="d-flex align-items-center gap-2 flex-wrap">
-    <img src="{% static 'team_logos/' %}{{ game.away_team.nba_team_id }}.svg"
-         style="height:28px;width:auto" alt="{{ game.away_team.name }}"
-         onerror="this.style.display='none'">
-    <h4 class="mb-0">
-      {{ game.away_team.abbr|default:game.away_team.name }}
-      <span class="text-muted">@</span>
-      {{ game.home_team.abbr|default:game.home_team.name }}
-    </h4>
-    <img src="{% static 'team_logos/' %}{{ game.home_team.nba_team_id }}.svg"
-         style="height:28px;width:auto" alt="{{ game.home_team.name }}"
-         onerror="this.style.display='none'">
-  </div>
-
-  <div class="text-muted mb-3 mt-2">
-    開賽時間：{{ game.start_time_utc|date:"Y-m-d" }} {{ game.start_time_utc|time:"H:i" }}（UTC）
-  </div>
-
-  {% if error %}
-    <div class="alert alert-danger soft-alert">{{ error }}</div>
-  {% endif %}
-
-  <form method="post">{% csrf_token %}
-    <div class="mb-2 fw-semibold">選擇勝方：</div>
-
-    <div class="d-flex gap-2 flex-wrap mb-3">
-      <label class="btn btn-outline-light d-flex align-items-center gap-2">
-        <input type="radio" name="pick" value="away" required>
-        <img src="{% static 'team_logos/' %}{{ game.away_team.nba_team_id }}.svg"
-             style="height:20px;width:auto" alt=""
-             onerror="this.style.display='none'">
-        客隊 {{ game.away_team.abbr|default:game.away_team.name }}
-      </label>
-
-      <label class="btn btn-outline-light d-flex align-items-center gap-2">
-        <input type="radio" name="pick" value="home" required>
-        <img src="{% static 'team_logos/' %}{{ game.home_team.nba_team_id }}.svg"
-             style="height:20px;width:auto" alt=""
-             onerror="this.style.display='none'">
-        主隊 {{ game.home_team.abbr|default:game.home_team.name }}
-      </label>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label fw-semibold">下注金額</label>
-      <input class="form-control" type="number" name="stake" min="1" step="1" required>
-      <div class="text-muted small mt-1">範例：100、200（以錢包餘額為上限）</div>
-    </div>
-
-    <div class="d-flex gap-2 flex-wrap">
-      <button class="btn btn-warning">送出下注</button>
-      <a class="btn btn-outline-light" href="{% url 'games:list' %}">返回</a>
-    </div>
-  </form>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="m-0">📌 比賽詳情</h3>
+  <a class="btn btn-sm btn-ghost" href="{% url 'games:list' %}">← 回賽程</a>
 </div>
+
+<div class="card p-3">
+  <div class="text-muted small mb-2">
+    開賽時間：
+    {% if g.start_time %}
+      {{ g.start_time|localtime|date:"Y/m/d H:i" }}
+    {% else %}
+      -
+    {% endif %}
+  </div>
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <img
+        src="{% static 'team_logos/' %}{{ g.away_team.abbr|upper }}.svg"
+        style="height:34px;width:auto"
+        alt="{{ g.away_team.name }}"
+        onerror="this.style.display='none'"
+      >
+      <div class="fw-bold fs-5">{{ g.away_team.abbr|default:g.away_team.name }}</div>
+    </div>
+
+    <div class="text-muted fs-5">@</div>
+
+    <div class="d-flex align-items-center gap-2">
+      <img
+        src="{% static 'team_logos/' %}{{ g.home_team.abbr|upper }}.svg"
+        style="height:34px;width:auto"
+        alt="{{ g.home_team.name }}"
+        onerror="this.style.display='none'"
+      >
+      <div class="fw-bold fs-5">{{ g.home_team.abbr|default:g.home_team.name }}</div>
+    </div>
+  </div>
+
+  <hr class="my-3">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      狀態：
+      {% if g.status == "scheduled" %}
+        <span class="badge bg-secondary">Scheduled</span>
+      {% elif g.status == "in_progress" %}
+        <span class="badge bg-warning text-dark">In Progress</span>
+      {% elif g.status == "final" %}
+        <span class="badge bg-success">Final</span>
+      {% else %}
+        <span class="badge bg-dark">Unknown</span>
+      {% endif %}
+    </div>
+
+    <div class="fs-4 fw-bold">
+      {% if g.home_score is not None and g.away_score is not None %}
+        {{ g.away_score }} - {{ g.home_score }}
+      {% else %}
+        -
+      {% endif %}
+    </div>
+  </div>
+
+  {% if g.status == "final" %}
+    <div class="text-muted small mt-2">
+      Winner：{% if g.winner %}{{ g.winner }}{% else %}-{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% if user.is_authenticated %}
+  <div class="card p-3 mt-3">
+    <h5 class="mb-2">💰 下注</h5>
+
+    {% if g.status == "scheduled" or g.status == "in_progress" %}
+      <form method="post" action="{% url 'betting:place' g.id %}" class="row g-2 align-items-end">
+        {% csrf_token %}
+        <div class="col-12 col-md-4">
+          <label class="form-label">選擇</label>
+          <select class="form-select" name="pick" required>
+            <option value="away">客勝：{{ g.away_team.abbr|default:g.away_team.name }}</option>
+            <option value="home">主勝：{{ g.home_team.abbr|default:g.home_team.name }}</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">金額</label>
+          <input class="form-control" type="number" name="stake" min="1" step="1" value="100" required>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <button class="btn btn-accent w-100" type="submit">下注</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="text-muted">這場比賽目前不可下注。</div>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="alert alert-info mt-3">
+    要下注請先 <a href="{% url 'login' %}">登入</a>
+  </div>
+{% endif %}
 {% endblock %}

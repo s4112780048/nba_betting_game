@@ -1,18 +1,26 @@
 # nba_betting/urls.py
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
+
+from core import views as core_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    path("games/", include(("games.urls", "games"), namespace="games")),
-    path("leaderboard/", include(("leaderboard.urls", "leaderboard"), namespace="leaderboard")),
+    # Django built-in auth
+    path("auth/", include("django.contrib.auth.urls")),
 
-    # allauth（要 Google 登入才需要）
-    path("accounts/", include("allauth.urls")),
+    # home
+    path("", core_views.home, name="home"),
 
-    # 你原本的 accounts app（若你保留本機帳密登入）
-    path("accounts-app/", include(("accounts.urls", "accounts"), namespace="accounts")),
+    # accounts app
+    path("accounts/", include("accounts.urls")),
+    path("accounts/profile/", RedirectView.as_view(url="/", permanent=False)),
 
-    path("", include(("core.urls", "core"), namespace="core")),
+    # other apps
+    path("games/", include("games.urls")),
+    path("betting/", include("betting.urls")),  # ✅ 下注功能
+    path("shop/", include("shop.urls")),
+    path("leaderboard/", include("leaderboard.urls")),
 ]

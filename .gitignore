@@ -13,5 +13,9 @@ db.sqlite3
 # static build
 staticfiles/
 
-# IDE
-.vscode/
+.venv/
+__pycache__/
+*.pyc
+.env
+db.sqlite3
+staticfiles/

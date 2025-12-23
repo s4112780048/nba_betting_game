@@ -13,21 +13,43 @@
 <body>
 <nav class="navbar navbar-expand-lg sticky-top navbar-light">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="{% url 'core:home' %}">
-      <span class="brand-dot"></span> NBA Betting
+    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{% url 'home' %}">
+      <img
+        src="{% static 'img/nba_logo.png' %}"
+        alt="NBA"
+        style="height:26px;width:auto;"
+        onerror="this.style.display='none'"
+      >
+      NBA Betting
     </a>
 
     <div class="d-flex flex-wrap gap-2 align-items-center ms-auto">
-      <a class="btn btn-sm btn-ghost" href="{% url 'games:list' %}">賽程</a>
-      <a class="btn btn-sm btn-ghost" href="{% url 'shop:list' %}">商店</a>
-      <a class="btn btn-sm btn-ghost" href="{% url 'leaderboard:current' %}">排行榜</a>
+      {# ✅ 用 as 變數，避免 namespace 沒註冊就整站 500 #}
+      {% url 'games:list' as games_list_url %}
+      {% url 'shop:list' as shop_list_url %}
+      {% url 'leaderboard:current' as leaderboard_url %}
+
+      {% if games_list_url %}
+        <a class="btn btn-sm btn-ghost" href="{{ games_list_url }}">賽程</a>
+      {% endif %}
+      {% if shop_list_url %}
+        <a class="btn btn-sm btn-ghost" href="{{ shop_list_url }}">商店</a>
+      {% endif %}
+      {% if leaderboard_url %}
+        <a class="btn btn-sm btn-ghost" href="{{ leaderboard_url }}">排行榜</a>
+      {% endif %}
 
       {% if user.is_authenticated %}
         <a class="btn btn-sm btn-accent" href="{% url 'accounts:wallet' %}">錢包</a>
-        <a class="btn btn-sm btn-ghost" href="{% url 'accounts:daily_bonus' %}">每日簽到</a>
-        <a class="btn btn-sm btn-outline-danger" href="{% url 'account_logout' %}">登出</a>
+
+        {# ✅ Django 內建 logout 預設是 POST，避免 405 #}
+        <form method="post" action="{% url 'logout' %}" style="display:inline;">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger" type="submit">登出</button>
+        </form>
       {% else %}
-        <a class="btn btn-sm btn-outline-primary" href="{% url 'account_login' %}">Google 登入</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'accounts:signup' %}">註冊</a>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'login' %}">登入</a>
       {% endif %}
     </div>
   </div>

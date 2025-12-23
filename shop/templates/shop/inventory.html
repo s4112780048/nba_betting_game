@@ -1,17 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Inventory{% endblock %}
 {% block content %}
+
 <h3 class="mb-3">🎒 我的道具</h3>
-<div class="card p-3">
-  <table class="table table-dark table-sm align-middle">
-    <thead><tr><th>道具</th><th>數量</th></tr></thead>
+
+<div class="card p-3 mb-3">
+  <h5 class="mb-2">道具</h5>
+  <table class="table table-dark table-sm align-middle mb-0">
+    <thead><tr><th>道具</th><th>數量</th><th></th></tr></thead>
     <tbody>
-    {% for row in inv %}
-      <tr><td>{{ row.item.name }}</td><td>{{ row.quantity }}</td></tr>
+    {% for row in inv_items %}
+      <tr>
+        <td>{{ row.item.name }}</td>
+        <td>{{ row.qty }}</td>
+        <td class="text-end">
+          {% if row.item.kind == "LOOT_BOX" %}
+            <form method="post" action="{% url 'shop:open' row.id %}">
+              {% csrf_token %}
+              <button class="btn btn-sm btn-accent" type="submit">開箱</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
     {% empty %}
-      <tr><td colspan="2" class="text-muted">尚無道具</td></tr>
+      <tr><td colspan="3" class="text-muted">尚無道具</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+
+<div class="card p-3">
+  <h5 class="mb-2">徽章</h5>
+  <table class="table table-dark table-sm align-middle mb-0">
+    <thead><tr><th>徽章</th><th>稀有度</th><th>狀態</th><th></th></tr></thead>
+    <tbody>
+    {% for b in badges %}
+      <tr>
+        <td>{{ b.badge.emoji }} {{ b.badge.name }}</td>
+        <td>{{ b.badge.rarity }}</td>
+        <td>{% if b.equipped %}已裝備{% else %}未裝備{% endif %}</td>
+        <td class="text-end">
+          <form method="post" action="{% url 'shop:equip_badge' b.id %}">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-light" type="submit">裝備</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="text-muted">尚無徽章</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 {% endblock %}

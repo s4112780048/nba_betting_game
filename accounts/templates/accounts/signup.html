@@ -1,37 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Signup{% endblock %}
+{% block title %}註冊{% endblock %}
+
 {% block content %}
-<div class="card p-4" style="max-width:520px;margin:0 auto;">
-  <h4 class="mb-3">註冊</h4>
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card p-4">
+      <h4 class="mb-3 text-center">📝 註冊帳號</h4>
 
-  {% if error %}
-    <div class="alert alert-danger soft-alert">{{ error }}</div>
-  {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
 
-  <form method="post">
-    {% csrf_token %}
+        <div class="d-grid mt-3">
+          <button type="submit" class="btn btn-primary">註冊</button>
+        </div>
+      </form>
 
-    <div class="mb-3">
-      <label class="form-label fw-semibold">帳號</label>
-      <input class="form-control" type="text" name="username" required>
-      <div class="text-muted small mt-1">建議用英文/數字（例：lien123）</div>
+      <div class="text-center mt-3">
+        <a href="{% url 'login' %}">已有帳號？登入</a>
+      </div>
     </div>
-
-    <div class="mb-3">
-      <label class="form-label fw-semibold">密碼</label>
-      <input class="form-control" type="password" name="password" required>
-      <div class="text-muted small mt-1">至少 6 碼</div>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label fw-semibold">再次輸入密碼</label>
-      <input class="form-control" type="password" name="password2" required>
-    </div>
-
-    <div class="d-flex gap-2 flex-wrap">
-      <button class="btn btn-accent" type="submit">建立帳號</button>
-      <a class="btn btn-ghost" href="{% url 'accounts:login' %}">我有帳號，要登入</a>
-    </div>
-  </form>
+  </div>
 </div>
 {% endblock %}

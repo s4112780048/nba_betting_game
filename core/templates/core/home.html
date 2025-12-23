@@ -28,7 +28,7 @@
     <div class="card p-3 h-100">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
         <h5 class="mb-0">⏳ 即將開賽</h5>
-        <div class="text-muted small">顯示 8 場</div>
+        <div class="text-muted small">顯示 10 場</div>
       </div>
 
       <div class="table-responsive mt-3">
@@ -44,23 +44,27 @@
           {% for g in upcoming %}
             <tr>
               <td class="text-muted small">
-                {{ g.start_time_utc|localtime|date:"m/d H:i" }}
+                {{ g.start_time|localtime|date:"m/d H:i" }}
               </td>
               <td>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                   <div class="d-flex align-items-center gap-2">
-                    <img src="{% static 'team_logos/' %}{{ g.away_team.nba_team_id }}.svg"
-                         style="height:22px;width:auto" alt="{{ g.away_team.name }}"
-                         onerror="this.style.display='none'">
+                    {% if g.away_team.logo_url %}
+                      <img src="{{ g.away_team.logo_url }}"
+                           style="height:22px;width:auto" alt="{{ g.away_team.name }}"
+                           onerror="this.style.display='none'">
+                    {% endif %}
                     <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
                   </div>
 
                   <span class="text-muted">@</span>
 
                   <div class="d-flex align-items-center gap-2">
-                    <img src="{% static 'team_logos/' %}{{ g.home_team.nba_team_id }}.svg"
-                         style="height:22px;width:auto" alt="{{ g.home_team.name }}"
-                         onerror="this.style.display='none'">
+                    {% if g.home_team.logo_url %}
+                      <img src="{{ g.home_team.logo_url }}"
+                           style="height:22px;width:auto" alt="{{ g.home_team.name }}"
+                           onerror="this.style.display='none'">
+                    {% endif %}
                     <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
                   </div>
                 </div>
@@ -70,7 +74,7 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="3" class="text-muted">沒有即將開賽的資料（先跑 sync_nba_schedule）</td></tr>
+            <tr><td colspan="3" class="text-muted">沒有即將開賽的資料（先跑 python manage.py sync_scores_espn）</td></tr>
           {% endfor %}
           </tbody>
         </table>
@@ -83,7 +87,7 @@
     <div class="card p-3 h-100">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
         <h5 class="mb-0">🏆 本月排行榜</h5>
-        <div class="text-muted small">{{ year }}/{{ month }}</div>
+        <div class="text-muted small">{{ month }}</div>
       </div>
 
       <div class="table-responsive mt-3">
@@ -92,7 +96,8 @@
             <tr>
               <th style="width:60px;">#</th>
               <th>玩家</th>
-              <th class="text-end" style="width:90px;">分數</th>
+              <th class="text-end" style="width:90px;">Profit</th>
+              <th class="text-end" style="width:90px;">W-L</th>
             </tr>
           </thead>
           <tbody>
@@ -100,10 +105,11 @@
             <tr>
               <td class="text-muted small">{{ forloop.counter }}</td>
               <td class="fw-semibold">{{ row.user.username }}</td>
-              <td class="text-end fw-semibold">{{ row.points }}</td>
+              <td class="text-end fw-semibold">{{ row.profit }}</td>
+              <td class="text-end text-muted">{{ row.wins }}-{{ row.losses }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="3" class="text-muted">本月尚無排行資料</td></tr>
+            <tr><td colspan="4" class="text-muted">本月尚無排行資料</td></tr>
           {% endfor %}
           </tbody>
         </table>

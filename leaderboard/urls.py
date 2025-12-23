@@ -1,9 +1,9 @@
 # leaderboard/urls.py
 from django.urls import path
-from .views import current_board
+from . import views
 
 app_name = "leaderboard"
 
 urlpatterns = [
-    path("", current_board, name="current"),
+    path("", views.leaderboard, name="current"),
 ]

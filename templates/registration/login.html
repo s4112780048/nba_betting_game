@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="card p-4" style="max-width:520px;margin:0 auto;">
+  <h4 class="mb-3">登入</h4>
+
+  {% if form.errors %}
+    <div class="alert alert-danger soft-alert">
+      帳號或密碼錯誤，請再試一次。
+    </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">帳號</label>
+      <input class="form-control" type="text" name="username" autocomplete="username" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">密碼</label>
+      <input class="form-control" type="password" name="password" autocomplete="current-password" required>
+    </div>
+
+    {% if next %}
+      <input type="hidden" name="next" value="{{ next }}">
+    {% endif %}
+
+    <button class="btn btn-accent w-100" type="submit">登入</button>
+    <a class="btn btn-ghost w-100 mt-2" href="{% url 'home' %}">返回首頁</a>
+  </form>
+</div>
+{% endblock %}

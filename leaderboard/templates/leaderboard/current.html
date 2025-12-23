@@ -1,22 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Leaderboard{% endblock %}
+
+{% block title %}本月排行榜{% endblock %}
+
 {% block content %}
-<h3 class="mb-3">🏆 排行榜（{{ year }}/{{ month }}）</h3>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="m-0">🏆 本月排行榜</h3>
+  <div class="text-muted small">{{ month }}</div>
+</div>
 
 <div class="card p-3">
-  <table class="table table-dark table-sm align-middle">
-    <thead><tr><th>#</th><th>玩家</th><th>分數</th></tr></thead>
-    <tbody>
-    {% for s in scores %}
-      <tr>
-        <td>{{ forloop.counter }}</td>
-        <td>{{ s.user.username }}</td>
-        <td><span class="badge bg-warning text-dark">{{ s.points }}</span></td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="3" class="text-muted">本月尚無分數</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:60px;">#</th>
+          <th>玩家</th>
+          <th class="text-end" style="width:90px;">勝</th>
+          <th class="text-end" style="width:90px;">敗</th>
+          <th class="text-end" style="width:110px;">下注量</th>
+          <th class="text-end" style="width:120px;">Profit</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td class="text-muted small">{{ forloop.counter }}</td>
+
+          <td class="fw-semibold">
+            {{ row.user.username }}
+            {# ✅ 後面顯示裝備徽章 #}
+            {% if row.user.equipped_badges and row.user.equipped_badges.0.badge %}
+              <span class="ms-1" title="{{ row.user.equipped_badges.0.badge.name }}">
+                {{ row.user.equipped_badges.0.badge.emoji }}
+              </span>
+            {% endif %}
+          </td>
+
+          <td class="text-end">{{ row.wins }}</td>
+          <td class="text-end">{{ row.losses }}</td>
+          <td class="text-end">{{ row.volume }}</td>
+          <td class="text-end fw-semibold">{{ row.profit }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-muted">本月尚無排行資料</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
+

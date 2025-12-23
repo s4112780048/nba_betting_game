@@ -11,12 +11,21 @@
           <h5 class="m-0">{{ it.name }}</h5>
           <span class="badge bg-warning text-dark">{{ it.price }}</span>
         </div>
-        <p class="text-muted mt-2">{{ it.description }}</p>
-        {% if user.is_authenticated %}
-          <a class="btn btn-warning mt-auto" href="{% url 'shop:buy' it.id %}">購買</a>
-        {% else %}
-          <a class="btn btn-outline-light mt-auto" href="{% url 'accounts:login' %}">登入後購買</a>
+
+        {% if it.description %}
+          <p class="text-muted mt-2">{{ it.description }}</p>
         {% endif %}
+
+        <div class="mt-auto">
+          {% if user.is_authenticated %}
+            <form method="post" action="{% url 'shop:buy' it.id %}">
+              {% csrf_token %}
+              <button class="btn btn-warning w-100" type="submit">購買</button>
+            </form>
+          {% else %}
+            <a class="btn btn-outline-light w-100" href="{% url 'account_login' %}">登入後購買</a>
+          {% endif %}
+        </div>
       </div>
     </div>
   {% empty %}

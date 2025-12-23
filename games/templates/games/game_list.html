@@ -1,135 +1,180 @@
 {% extends "base.html" %}
+{% load tz %}
 {% load static %}
-{% block title %}Games{% endblock %}
+
+{% block title %}賽程{% endblock %}
 
 {% block content %}
 <h3 class="mb-3">📅 賽程</h3>
 
-<!-- 即將開賽 -->
-<div class="card p-3 mb-4">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h5 class="mb-0">即將開賽</h5>
-    <a class="btn btn-sm btn-ghost" href="{% url 'games:list' %}">看完整賽程</a>
+<div class="row g-3">
+  <!-- Upcoming -->
+  <div class="col-12 col-lg-6">
+    <div class="card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">⏳ 即將開賽 / 進行中</h5>
+        <span class="text-muted small">顯示最多 200 場</span>
+      </div>
+
+      <div class="table-responsive mt-3">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:140px;">時間</th>
+              <th>對戰</th>
+              <th style="width:110px;">狀態</th>
+              <th class="text-end" style="width:90px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for g in upcoming %}
+            <tr>
+              <td class="text-muted small text-nowrap">
+                {{ g.start_time|localtime|date:"Y/m/d H:i" }}
+              </td>
+
+              <td>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <!-- Away -->
+                  <div class="d-flex align-items-center gap-2">
+                    <img
+                      class="team-logo"
+                      src="{% static 'team_logos/' %}{{ g.away_team.abbr|upper }}.svg"
+                      data-fallback="{% if g.away_team.logo_url %}{{ g.away_team.logo_url }}{% endif %}"
+                      style="height:20px;width:auto"
+                      alt="{{ g.away_team.name }}"
+                    >
+                    <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
+                  </div>
+
+                  <span class="text-muted mx-1">@</span>
+
+                  <!-- Home -->
+                  <div class="d-flex align-items-center gap-2">
+                    <img
+                      class="team-logo"
+                      src="{% static 'team_logos/' %}{{ g.home_team.abbr|upper }}.svg"
+                      data-fallback="{% if g.home_team.logo_url %}{{ g.home_team.logo_url }}{% endif %}"
+                      style="height:20px;width:auto"
+                      alt="{{ g.home_team.name }}"
+                    >
+                    <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
+                  </div>
+                </div>
+              </td>
+
+              <td>
+                {% if g.status == "scheduled" %}
+                  <span class="badge bg-secondary">Scheduled</span>
+                {% elif g.status == "in_progress" %}
+                  <span class="badge bg-warning text-dark">In Progress</span>
+                {% elif g.status == "final" %}
+                  <span class="badge bg-success">Final</span>
+                {% else %}
+                  <span class="badge bg-dark">Unknown</span>
+                {% endif %}
+              </td>
+
+              <td class="text-end">
+                <a class="btn btn-sm btn-accent" href="{% url 'games:detail' g.id %}">詳情</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-muted">沒有即將開賽的比賽（先跑 sync_scores_espn）</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead>
-        <tr>
-          <th style="width:190px;">時間</th>
-          <th>對戰</th>
-          <th class="text-end" style="width:120px;"></th>
-        </tr>
-      </thead>
+  <!-- Recent -->
+  <div class="col-12 col-lg-6">
+    <div class="card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">✅ 最近完賽</h5>
+        <span class="text-muted small">顯示最多 200 場</span>
+      </div>
 
-      <tbody>
-      {% for g in upcoming %}
-        <tr>
-          <td class="text-muted small">
-            {{ g.start_time_utc|date:"Y-m-d" }} {{ g.start_time_utc|time:"H:i" }}
-          </td>
+      <div class="table-responsive mt-3">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:140px;">時間</th>
+              <th>對戰</th>
+              <th style="width:120px;">比分</th>
+              <th class="text-end" style="width:90px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for g in recent %}
+            <tr>
+              <td class="text-muted small text-nowrap">
+                {{ g.start_time|localtime|date:"m/d H:i" }}
+              </td>
 
-          <td>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <div class="d-flex align-items-center gap-2">
-                <img src="{% static 'team_logos/' %}{{ g.away_team.nba_team_id }}.svg"
-                     style="height:22px;width:auto"
-                     alt="{{ g.away_team.name }}"
-                     onerror="this.style.display='none'">
-                <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
-              </div>
+              <td>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <!-- Away -->
+                  <div class="d-flex align-items-center gap-2">
+                    <img
+                      class="team-logo"
+                      src="{% static 'team_logos/' %}{{ g.away_team.abbr|upper }}.svg"
+                      data-fallback="{% if g.away_team.logo_url %}{{ g.away_team.logo_url }}{% endif %}"
+                      style="height:20px;width:auto"
+                      alt="{{ g.away_team.name }}"
+                    >
+                    <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
+                  </div>
 
-              <span class="text-muted">@</span>
+                  <span class="text-muted mx-1">@</span>
 
-              <div class="d-flex align-items-center gap-2">
-                <img src="{% static 'team_logos/' %}{{ g.home_team.nba_team_id }}.svg"
-                     style="height:22px;width:auto"
-                     alt="{{ g.home_team.name }}"
-                     onerror="this.style.display='none'">
-                <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
-              </div>
-            </div>
-          </td>
+                  <!-- Home -->
+                  <div class="d-flex align-items-center gap-2">
+                    <img
+                      class="team-logo"
+                      src="{% static 'team_logos/' %}{{ g.home_team.abbr|upper }}.svg"
+                      data-fallback="{% if g.home_team.logo_url %}{{ g.home_team.logo_url }}{% endif %}"
+                      style="height:20px;width:auto"
+                      alt="{{ g.home_team.name }}"
+                    >
+                    <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
+                  </div>
+                </div>
+              </td>
 
-          <td class="text-end">
-            <a class="btn btn-sm btn-accent" href="{% url 'games:detail' g.id %}">下注</a>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="3" class="text-muted">沒有資料：請先跑 sync_nba_schedule</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+              <td class="text-nowrap">
+                {{ g.away_score }} - {{ g.home_score }}
+              </td>
+
+              <td class="text-end">
+                <a class="btn btn-sm btn-ghost" href="{% url 'games:detail' g.id %}">詳情</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-muted">尚無完賽資料</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- 最近比賽 -->
-<div class="card p-3">
-  <h5 class="mb-2">最近比賽</h5>
+<script>
+  // ✅ 一次處理所有 logo：本地 svg 失敗 -> 用 fallback URL；都沒有 -> 隱藏
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("img.team-logo").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fb = img.dataset.fallback || "";
+        if (fb) {
+          img.src = fb;
+        } else {
+          img.style.display = "none";
+        }
+      }, { once: true });
+    });
+  });
+</script>
 
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead>
-        <tr>
-          <th style="width:190px;">時間</th>
-          <th>對戰</th>
-          <th style="width:120px;">比分</th>
-          <th style="width:90px;">狀態</th>
-        </tr>
-      </thead>
-
-      <tbody>
-      {% for g in recent %}
-        <tr>
-          <td class="text-muted small">
-            {{ g.start_time_utc|date:"Y-m-d" }} {{ g.start_time_utc|time:"H:i" }}
-          </td>
-
-          <td>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <div class="d-flex align-items-center gap-2">
-                <img src="{% static 'team_logos/' %}{{ g.away_team.nba_team_id }}.svg"
-                     style="height:22px;width:auto"
-                     alt="{{ g.away_team.name }}"
-                     onerror="this.style.display='none'">
-                <span class="fw-semibold">{{ g.away_team.abbr|default:g.away_team.name }}</span>
-              </div>
-
-              <span class="text-muted">@</span>
-
-              <div class="d-flex align-items-center gap-2">
-                <img src="{% static 'team_logos/' %}{{ g.home_team.nba_team_id }}.svg"
-                     style="height:22px;width:auto"
-                     alt="{{ g.home_team.name }}"
-                     onerror="this.style.display='none'">
-                <span class="fw-semibold">{{ g.home_team.abbr|default:g.home_team.name }}</span>
-              </div>
-            </div>
-          </td>
-
-          <td>
-            <span class="fw-semibold">{{ g.away_score }}</span>
-            <span class="text-muted">-</span>
-            <span class="fw-semibold">{{ g.home_score }}</span>
-          </td>
-
-          <td>
-            {% if g.status == 3 %}
-              <span class="badge bg-success">Final</span>
-            {% elif g.status == 2 %}
-              <span class="badge bg-warning text-dark">Live</span>
-            {% else %}
-              <span class="badge bg-secondary">Scheduled</span>
-            {% endif %}
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="4" class="text-muted">尚無資料</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
 {% endblock %}

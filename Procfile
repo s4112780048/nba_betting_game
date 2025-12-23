@@ -1,1 +1,1 @@
-web: gunicorn nba_betting.wsgi:application --bind 0.0.0.0:$PORT
+web: bash start.sh

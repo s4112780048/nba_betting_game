@@ -1,32 +1,100 @@
 {% extends "base.html" %}
 {% block title %}Wallet{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h3 class="m-0">💰 錢包</h3>
   <a class="btn btn-outline-light" href="{% url 'shop:list' %}">前往商店</a>
 </div>
 
-<div class="card p-3 mb-3">
-  <div>餘額：<span class="badge bg-warning text-dark fs-6">{{ wallet.balance }}</span></div>
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-6">
+    <div class="card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted">目前餘額</div>
+        <span class="badge bg-warning text-dark fs-6">{{ wallet.balance }}</span>
+      </div>
+
+      <div class="small text-muted mt-2">
+        * 金額為整數（BigInteger），避免浮點誤差
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card p-3 h-100">
+      <h5 class="mb-3">快速操作</h5>
+
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <form method="post" action="{% url 'accounts:deposit' %}" class="d-flex gap-2">
+          {% csrf_token %}
+          <input
+            type="number"
+            name="amount"
+            class="form-control form-control-sm"
+            placeholder="儲值金額"
+            min="1"
+            step="1"
+            required
+            style="max-width: 160px;"
+          >
+          <button class="btn btn-success btn-sm" type="submit">儲值</button>
+        </form>
+
+        <form method="post" action="{% url 'accounts:withdraw' %}" class="d-flex gap-2">
+          {% csrf_token %}
+          <input
+            type="number"
+            name="amount"
+            class="form-control form-control-sm"
+            placeholder="提領金額"
+            min="1"
+            step="1"
+            required
+            style="max-width: 160px;"
+          >
+          <button class="btn btn-danger btn-sm" type="submit">提領</button>
+        </form>
+      </div>
+
+      <div class="small text-muted mt-2">
+        提示：提領會檢查餘額，不足會失敗（由 views 顯示錯誤訊息）
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="card p-3">
-  <h5>交易紀錄</h5>
+  <h5 class="mb-3">交易紀錄</h5>
+
   <div class="table-responsive">
-    <table class="table table-dark table-sm align-middle">
+    <table class="table table-dark table-sm align-middle mb-0">
       <thead>
-        <tr><th>時間</th><th>類型</th><th>金額</th><th>備註</th></tr>
+        <tr>
+          <th>時間</th>
+          <th>類型</th>
+          <th class="text-end">金額</th>
+          <th>Ref</th>
+          <th>備註</th>
+        </tr>
       </thead>
       <tbody>
       {% for tx in txs %}
         <tr>
-          <td>{{ tx.created_at }}</td>
-          <td>{{ tx.type }}</td>
-          <td>{{ tx.amount }}</td>
+          <td class="text-nowrap">{{ tx.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ tx.tx_type }}</td>
+          <td class="text-end">
+            {% if tx.amount >= 0 %}
+              <span class="text-success">+{{ tx.amount }}</span>
+            {% else %}
+              <span class="text-danger">{{ tx.amount }}</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ tx.ref }}</td>
           <td class="text-muted">{{ tx.note }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="4" class="text-muted">尚無交易紀錄</td></tr>
+        <tr><td colspan="5" class="text-muted">尚無交易紀錄</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -1,10 +1,12 @@
+# shop/views.py
 import random
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import render, get_object_or_404, redirect
 
-from accounts.models import Wallet, WalletTx
+from accounts.models import get_or_create_wallet, wallet_add, wallet_sub
 from .models import ShopItem, InventoryItem, Badge, UserBadge, LootOpenLog
 
 
@@ -20,16 +22,13 @@ def buy_item(request, item_id):
         return redirect("shop:list")
 
     item = get_object_or_404(ShopItem, pk=item_id, active=True)
+    wallet = get_or_create_wallet(request.user)
 
-    w, _ = Wallet.objects.select_for_update().get_or_create(user=request.user, defaults={"balance": 0})
-    if w.balance < item.price:
+    try:
+        wallet_sub(wallet, item.price, tx_type="shop_buy", ref=item.code, note=f"Buy {item.code}")
+    except Exception:
         messages.error(request, "餘額不足，無法購買。")
         return redirect("shop:list")
-
-    # 扣款
-    w.balance -= item.price
-    w.save()
-    WalletTx.objects.create(wallet=w, type="shop_buy", amount=-item.price, note=f"Buy {item.code}")
 
     # 發放物品
     if item.kind == "BADGE":
@@ -45,7 +44,7 @@ def buy_item(request, item_id):
 
     inv, _ = InventoryItem.objects.get_or_create(user=request.user, item=item, defaults={"qty": 0})
     inv.qty += 1
-    inv.save()
+    inv.save(update_fields=["qty", "updated_at"])
 
     if item.kind == "LOOT_BOX":
         messages.success(request, "✅ 已購買戰利品箱，去背包開箱吧！")
@@ -86,7 +85,7 @@ def open_lootbox(request, inv_id):
         return redirect("shop:inventory")
 
     inv.qty -= 1
-    inv.save()
+    inv.save(update_fields=["qty", "updated_at"])
 
     payload = inv.item.payload or {}
     minc = int(payload.get("min_coins", 100))
@@ -108,10 +107,8 @@ def open_lootbox(request, inv_id):
     # 沒中徽章 → 抽金幣
     if not got_badge:
         reward_coins = random.randint(minc, maxc)
-        w, _ = Wallet.objects.select_for_update().get_or_create(user=request.user, defaults={"balance": 0})
-        w.balance += reward_coins
-        w.save()
-        WalletTx.objects.create(wallet=w, type="lootbox", amount=reward_coins, note=f"Open {inv.item.code}")
+        wallet = get_or_create_wallet(request.user)
+        wallet_add(wallet, reward_coins, tx_type="lootbox", ref=inv.item.code, note=f"Open {inv.item.code}")
 
     LootOpenLog.objects.create(
         user=request.user,
@@ -143,7 +140,7 @@ def equip_badge(request, badge_id):
 
     UserBadge.objects.filter(user=request.user, equipped=True).update(equipped=False)
     ub.equipped = True
-    ub.save()
+    ub.save(update_fields=["equipped"])
 
     messages.success(request, f"✅ 已裝備徽章：{ub.badge.emoji} {ub.badge.name}")
     return redirect("shop:inventory")

@@ -12,16 +12,15 @@ from games.models import Team, Game
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 
-# ✅ 縮寫統一（你問 Utah：ESPN 常見是 UTA；有些來源可能會變，這邊統一）
 ABBR_MAP = {
     "UTH": "UTA",
     "UTAH": "UTA",
     "PHO": "PHX",
     "BRK": "BKN",
-    "BKN": "BKN",
     "GS": "GSW",
     "NY": "NYK",
     "NO": "NOP",
+    "SA": "SAS",   # ✅ Spurs
 }
 
 def norm_abbr(x: str) -> str:
@@ -46,26 +45,30 @@ def _safe_int(v, default=0):
     except Exception:
         return default
 
-def _map_status(espn_status: dict) -> int:
+def _map_status(espn_status: dict) -> str:
     st = espn_status or {}
     typ = st.get("type") or {}
     state = (typ.get("state") or "").lower()   # pre / in / post
     completed = bool(typ.get("completed", False))
     if completed or state == "post":
-        return 3
+        return "final"
     if state == "in":
-        return 2
-    return 1
+        return "in_progress"
+    if state == "pre":
+        return "scheduled"
+    return "unknown"
 
 class Command(BaseCommand):
-    help = "Sync schedule/scores from ESPN for past N days and forward F days. Creates/updates games."
+    help = "Sync schedule/scores from ESPN for past N days and forward F days."
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, default=2, help="How many days back (default 2).")
-        parser.add_argument("--forward", type=int, default=7, help="How many days forward for schedule (default 7).")
+        parser.add_argument("--forward", type=int, default=7, help="How many days forward (default 7).")
         parser.add_argument("--sleep", type=float, default=0.25, help="Sleep seconds between requests.")
         parser.add_argument("--timeout", type=float, default=12.0, help="HTTP timeout seconds.")
         parser.add_argument("--quiet", action="store_true", help="Less logs.")
+        parser.add_argument("--debug", action="store_true", help="Print first few skip/error reasons.")
+        parser.add_argument("--debug-limit", type=int, default=10, help="Max debug prints.")
 
     def handle(self, *args, **options):
         days = max(0, int(options["days"]))
@@ -73,6 +76,9 @@ class Command(BaseCommand):
         sleep_s = max(0.0, float(options["sleep"]))
         timeout = float(options["timeout"])
         quiet = bool(options["quiet"])
+        debug = bool(options["debug"])
+        debug_limit = int(options["debug_limit"])
+        debug_count = 0
 
         session = requests.Session()
         session.headers.update(
@@ -89,12 +95,9 @@ class Command(BaseCommand):
         start_date = today_utc - timedelta(days=days)
         end_date = today_utc + timedelta(days=forward)
 
-        created_games = 0
-        updated_games = 0
-        created_teams = 0
-        updated_teams = 0
-        skipped_days = 0
-        skipped_events = 0
+        created_games = updated_games = 0
+        created_teams = updated_teams = 0
+        skipped_days = skipped_events = 0
 
         self.stdout.write(f"ESPN sync {start_date} -> {end_date} (UTC). back={days} forward={forward}")
 
@@ -139,8 +142,7 @@ class Command(BaseCommand):
                         skipped_events += 1
                         continue
 
-                    home = None
-                    away = None
+                    home = away = None
                     for c in competitors:
                         ha = (c.get("homeAway") or "").lower()
                         if ha == "home":
@@ -168,39 +170,46 @@ class Command(BaseCommand):
                     home_score = _safe_int(home.get("score"), 0)
                     away_score = _safe_int(away.get("score"), 0)
 
-                    home_name = (ht.get("displayName") or "").strip()
-                    away_name = (at.get("displayName") or "").strip()
+                    home_name = (ht.get("displayName") or "").strip() or home_abbr
+                    away_name = (at.get("displayName") or "").strip() or away_abbr
+
+                    # ✅ ESPN team logo url 通常在 team.logo
+                    home_logo = (ht.get("logo") or "").strip()
+                    away_logo = (at.get("logo") or "").strip()
 
                     with transaction.atomic():
                         home_team, home_created = Team.objects.update_or_create(
-                            abbr=home_abbr,
-                            defaults={"name": home_name, "city": ""},
+                            source="espn",
+                            source_team_id=str(ht.get("id") or home_abbr),
+                            defaults={
+                                "name": home_name,
+                                "abbr": home_abbr,
+                                "logo_url": home_logo,
+                            },
                         )
                         away_team, away_created = Team.objects.update_or_create(
-                            abbr=away_abbr,
-                            defaults={"name": away_name, "city": ""},
+                            source="espn",
+                            source_team_id=str(at.get("id") or away_abbr),
+                            defaults={
+                                "name": away_name,
+                                "abbr": away_abbr,
+                                "logo_url": away_logo,
+                            },
                         )
                         created_teams += int(home_created) + int(away_created)
                         updated_teams += int(not home_created) + int(not away_created)
 
-                        winner = None
-                        if status == 3:
-                            if home_score > away_score:
-                                winner = home_team
-                            elif away_score > home_score:
-                                winner = away_team
-
                         obj, created = Game.objects.update_or_create(
-                            source="ESPN",
+                            source="espn",
                             source_game_id=event_id,
                             defaults={
-                                "start_time_utc": start_dt_utc,
+                                "start_time": start_dt_utc,
                                 "status": status,
                                 "home_team": home_team,
                                 "away_team": away_team,
-                                "home_score": home_score,
-                                "away_score": away_score,
-                                "winner": winner,
+                                "home_score": home_score if status != "scheduled" else None,
+                                "away_score": away_score if status != "scheduled" else None,
+                                "raw_json": ev,
                             },
                         )
                         if created:
@@ -208,8 +217,11 @@ class Command(BaseCommand):
                         else:
                             updated_games += 1
 
-                except Exception:
+                except Exception as e:
                     skipped_events += 1
+                    if debug and debug_count < debug_limit:
+                        debug_count += 1
+                        self.stdout.write(self.style.WARNING(f"[DEBUG SKIP] {yyyymmdd} err={e} ev_id={ev.get('id')}"))
                     continue
 
             if not quiet:

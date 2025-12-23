@@ -1,31 +1,58 @@
 # betting/models.py
+from __future__ import annotations
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
-from games.models import Game, Team
+from games.models import Game
+
 
 class Bet(models.Model):
-    STATUS_CHOICES = [
-        ("OPEN", "OPEN"),
-        ("SETTLED", "SETTLED"),
-        ("CANCELLED", "CANCELLED"),
-    ]
+    PICK_CHOICES = (
+        ("home", "Home Win"),
+        ("away", "Away Win"),
+    )
+    STATUS_CHOICES = (
+        ("open", "Open"),
+        ("won", "Won"),
+        ("lost", "Lost"),
+        ("void", "Void"),
+    )
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name="bets")
-    pick_team = models.ForeignKey(Team, on_delete=models.PROTECT)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bets",
+    )
+    game = models.ForeignKey(
+        Game,
+        on_delete=models.CASCADE,
+        related_name="bets",
+    )
 
-    stake = models.IntegerField()
-    payout = models.IntegerField(default=0)  # 贏了實拿（不含原本扣掉的 stake）
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="OPEN")
+    # ✅ default="home"：避免舊資料新增欄位時 makemigrations 一直問 default
+    pick = models.CharField(max_length=10, choices=PICK_CHOICES, default="home")
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    stake = models.BigIntegerField()
+
+    # decimal odds，例如 1.91 → 191
+    odds_x100 = models.PositiveIntegerField(default=200)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open")
+    payout = models.BigIntegerField(default=0)
+
+    created_at = models.DateTimeField(default=timezone.now)
     settled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["user", "game"], name="uniq_bet_per_user_per_game")
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["user", "created_at"]),
         ]
 
-    def __str__(self):
-        return f"{self.user} {self.game} pick={self.pick_team.abbr} stake={self.stake} {self.status}"
+    def potential_payout(self) -> int:
+        return (int(self.stake) * int(self.odds_x100)) // 100
+
+    def __str__(self) -> str:
+        return f"Bet({self.user_id}) {self.game_id} pick={self.pick} stake={self.stake} status={self.status}"

@@ -4,8 +4,13 @@ from . import views
 app_name = "accounts"
 
 urlpatterns = [
-    path("login/", views.login_view, name="login"),
-    path("logout/", views.logout_view, name="logout"),
+    path("signup/", views.signup, name="signup"),
     path("wallet/", views.wallet_view, name="wallet"),
+    path("deposit/", views.deposit, name="deposit"),
+    path("withdraw/", views.withdraw, name="withdraw"),
     path("daily-bonus/", views.daily_bonus, name="daily_bonus"),
 ]
+
+
+
+

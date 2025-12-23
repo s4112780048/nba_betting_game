@@ -27,7 +27,7 @@ class ShopItem(models.Model):
     active = models.BooleanField(default=True)
 
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="GENERIC")
-    payload = models.JSONField(default=dict, blank=True)  # ex: {"badge_code":"VIP"} or {"min_coins":100,"max_coins":400,"badge_chance":0.35}
+    payload = models.JSONField(default=dict, blank=True)
     image_url = models.URLField(blank=True)
 
     def __str__(self):
